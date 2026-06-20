@@ -18,6 +18,7 @@ func (ctx *Context) Reply(content string, msgType structers.MessageType) error {
 			MessageType: msgType,
 			MessageId:   ctx.Message.MessageId,
 		}
+		ctx.Message.MessageId = ""
 		return ctx.Client.SendPrivateMessage(msg, ctx.Message.UserId)
 	} else {
 		msg := structers.Message{
@@ -25,6 +26,7 @@ func (ctx *Context) Reply(content string, msgType structers.MessageType) error {
 			MessageType: msgType,
 			MessageId:   ctx.Message.MessageId,
 		}
+		ctx.Message.MessageId = ""
 		return ctx.Client.SendGroupMessage(msg, ctx.Message.GroupId)
 	}
 }
