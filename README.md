@@ -207,6 +207,36 @@ ctx.Reply("", structers.PlainText)
 - body 请求体(可以为`[]byte`或者为可以被`json.Marshal`的对象)
 - result/headers 同上
 
+### Markdown模板
+
+可以在`templates/markdown`下面存放多个`.md`文件, 每个文件为一个Markdown模板, 非`.md`文件会被忽略
+
+在Markdown模板里, 可以使用插值语法":
+```markdown
+## {{ aaa }}
+```
+
+文件名(**不包含**.md后缀)将作为模板ID
+
+通过调用`lib/templates`的`FillMarkdownTemplate(Id string, args map[string]string)`函数可以填充模板
+
+该函数需要两个参数
+
+- Id 模板ID
+- args 参数列表
+
+当模板ID不存在时, 返回错误
+
+当参数列表args传入的参数不满足模板里定义的**所有**插值时, 返回错误
+
+#### 追加图片元信息
+
+QQ的Markdown无法自适应图片大小, 必须追加元信息才能正常显示:
+```markdown
+![alt #300px #400px](https://aaa.com/bbb.jpg)
+```
+可以调用`ProcessMarkdownImages`辅助函数, 该函数会自动处理所有图片引用并追加元信息
+
 ### TODO
 
 - [ ] 支持按钮功能

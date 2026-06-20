@@ -7,9 +7,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/fs"
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 
@@ -19,6 +21,7 @@ import (
 	"botOffical/lib/qqapi"
 	"botOffical/lib/requests"
 	"botOffical/lib/structers"
+	"botOffical/lib/templates"
 	_ "botOffical/plugins"
 
 	"github.com/gin-gonic/gin"
@@ -176,9 +179,12 @@ func processPayload(payload Payload, client *qqapi.Client) {
 
 func main() {
 	appConfig := initConfig()
-
-	r := gin.Default()
 	client := qqapi.Init(appConfig.AppId, appConfig.AppSecret, appConfig.ProxyAPI, requestsClient)
+	err := InitTemplate()
+	if err != nil {
+		log.Fatalf("Failed when scan Markdown template: %v", err)
+	}
+	r := gin.Default()
 
 	// 签名校验中间件
 	r.Use(VerifySignature(appConfig.AppSecret))
@@ -220,4 +226,37 @@ func main() {
 
 	log.Printf("Server running on %v", appConfig.Port)
 	r.Run(fmt.Sprintf(":%v", appConfig.Port))
+}
+
+func InitTemplate() error {
+	// Markdown模板
+	root := "templates/markdown"
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		// 处理遍历过程中的错误
+		if err != nil {
+			return err
+		}
+
+		// 忽略目录，只处理文件
+		if d.IsDir() {
+			return nil
+		}
+
+		// 检查文件后缀是否为.md
+		if filepath.Ext(path) == ".md" {
+			fileName := strings.TrimSuffix(filepath.Base(path), ".md")
+			content, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			templates.NewMarkdownTemplate(fileName, string(content))
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return err
+	}
+	return nil
 }
