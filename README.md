@@ -175,6 +175,13 @@ ctx.Reply("", structers.PlainText)
 
 目前仅存在两种枚举: `PrivateMessage`及`GroupMessage`
 
+### TODO
+
+- [ ] 支持按钮功能
+
+#### 不会支持的功能
+- 所有与频道相关的功能
+
 ## 许可证
 
 MIT
