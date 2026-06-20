@@ -9,7 +9,6 @@ import (
 	"botOffical/lib/templates"
 	"fmt"
 	"reflect"
-	"strconv"
 )
 
 type QueryArgs struct {
@@ -85,15 +84,15 @@ func init() {
 					ctx.Reply(fmt.Sprintf("## 40code API请求异常\n```\n%v\n```", err), structers.Markdown)
 					return err
 				}
-				templateArgs := make(map[string]string)
-				templateArgs["name"] = data.Data.Name
-				templateArgs["look"] = strconv.Itoa(data.Data.Look)
-				templateArgs["like"] = strconv.Itoa(data.Data.Like)
-				templateArgs["collections"] = strconv.Itoa(data.Data.Collections)
-				templateArgs["nickname"] = data.Data.Nickname
-				templateArgs["author"] = strconv.Itoa(data.Data.Author)
-				templateArgs["image"] = fmt.Sprintf("https://abc.520gxx.com/static/internalapi/asset/%v", data.Data.Image)
-				tmp, err := templates.FillMarkdownTemplate("40codeWorkInfo", templateArgs)
+				tmp, err := templates.FillMarkdownTemplate("40codeWorkInfo", templates.Args{
+					"name":        data.Data.Name,
+					"look":        data.Data.Look,
+					"like":        data.Data.Like,
+					"collections": data.Data.Collections,
+					"nickname":    data.Data.Nickname,
+					"author":      data.Data.Author,
+					"image":       fmt.Sprintf("https://abc.520gxx.com/static/internalapi/asset/%v", data.Data.Image),
+				})
 				if err != nil {
 					ctx.Reply(fmt.Sprintf("Markdown填充异常: %v", err), structers.PlainText)
 				}

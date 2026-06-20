@@ -13,6 +13,23 @@ type MarkdownTemplate struct {
 	args     []string
 }
 
+type Args map[string]any
+
+func ToMapString(h Args) (map[string]string, error) {
+	result := make(map[string]string, len(h))
+	for k, v := range h {
+		switch val := v.(type) {
+		case string:
+			result[k] = val
+		case int, int64, float64:
+			result[k] = fmt.Sprintf("%v", val)
+		default:
+			return nil, fmt.Errorf("key %s has unsupported type: %T", k, v)
+		}
+	}
+	return result, nil
+}
+
 var MarkdownTemplates []*MarkdownTemplate
 
 func processTemplate(input string) (string, []string) {
@@ -80,7 +97,11 @@ func ProcessMarkdownImages(input string) string {
 	})
 }
 
-func FillMarkdownTemplate(Id string, args map[string]string) (string, error) {
+func FillMarkdownTemplate(Id string, arg Args) (string, error) {
+	args, err := ToMapString(arg)
+	if err != nil {
+		return "", err
+	}
 	for _, v := range MarkdownTemplates {
 		if v.Id == Id {
 			template := v.Template

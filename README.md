@@ -218,16 +218,33 @@ ctx.Reply("", structers.PlainText)
 
 文件名(**不包含**.md后缀)将作为模板ID
 
-通过调用`lib/templates`的`FillMarkdownTemplate(Id string, args map[string]string)`函数可以填充模板
+通过调用`lib/templates`的`FillMarkdownTemplate(Id string, args Args)`函数可以填充模板
 
 该函数需要两个参数
 
 - Id 模板ID
 - args 参数列表
 
+#### 参数列表
+
+是由`type Args map[string]any`定义的, 可以通过类似于:
+```go
+templates.Args{
+	"name":        data.Data.Name,
+	"look":        data.Data.Look,
+}
+```
+的方式直接声明, 原本的`map[string]string`不再使用
+
+参数既可以是`string`也可以是`int, int64, float64`
+
+#### 可能的错误
+
 当模板ID不存在时, 返回错误
 
 当参数列表args传入的参数不满足模板里定义的**所有**插值时, 返回错误
+
+当参数列表args传入的结构体中有无法使用的类型时, 返回错误
 
 #### 追加图片元信息
 
