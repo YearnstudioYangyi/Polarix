@@ -2,13 +2,15 @@ package context
 
 import (
 	"botOffical/lib/qqapi"
+	"botOffical/lib/requests"
 	"botOffical/lib/structers"
 )
 
 type Context struct {
-	Client  *qqapi.Client      // QQ API对象
-	Message *structers.Message // 原始消息结构体
-	Parserd any                // 解析后的字段
+	Client   *qqapi.Client      // QQ API对象
+	Message  *structers.Message // 原始消息结构体
+	Parserd  any                // 解析后的字段
+	Requests *requests.Client   // 公共请求代理
 }
 
 func (ctx *Context) Reply(content string, msgType structers.MessageType) error {

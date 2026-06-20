@@ -1,11 +1,9 @@
 package qqapi
 
 import (
+	"botOffical/lib/requests"
 	"botOffical/lib/structers"
-	"bytes"
-	"encoding/json"
 	"fmt"
-	"net/http"
 	"strconv"
 	"sync"
 	"time"
@@ -15,26 +13,24 @@ type Client struct {
 	ProxyAPI    string
 	AppID       string
 	AppSecret   string
-	Request     *http.Client
+	Request     *requests.Client
 	accessToken string
 	expireAt    time.Time
 	lock        sync.RWMutex
 }
 
-func Init(AppID string, AppSecret string, ProxyAPI string) Client {
+func Init(AppID string, AppSecret string, ProxyAPI string, requests *requests.Client) Client {
 	return Client{
-		AppID:     AppID,
-		AppSecret: AppSecret,
-		ProxyAPI:  ProxyAPI,
-		Request: &http.Client{
-			Timeout: 5 * time.Second,
-		},
+		AppID:       AppID,
+		AppSecret:   AppSecret,
+		ProxyAPI:    ProxyAPI,
+		Request:     requests,
 		accessToken: "",
 	}
 }
 
 // 生成Access Token
-func (c *Client) GetAccessToken() (string, error) {
+func (c *Client) getAccessToken() (string, error) {
 	// log.Print("正在生成AccessToken")
 	c.lock.RLock()
 	if c.accessToken != "" && time.Now().Before(c.expireAt) {
@@ -53,26 +49,15 @@ func (c *Client) GetAccessToken() (string, error) {
 	}
 	// 获取新的Token
 	initData := fmt.Appendf(nil, `{"appId":"%s", "clientSecret":"%s"}`, c.AppID, c.AppSecret)
-	// log.Printf("请求数据: %v", initData)
-	resp, err := http.Post("https://bots.qq.com/app/getAppAccessToken", "application/json", bytes.NewBuffer(initData))
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-	// log.Print("请求完毕")
-	// 判断状态码
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("Request failed with code: %v", resp.StatusCode)
-	}
-	// 解析数据
+	// 数据模型
 	type TokenData struct {
 		AccessToken string `json:"access_token"`
 		ExpireTime  string `json:"expires_in"`
 	}
 	var tokenData TokenData
-	err = json.NewDecoder(resp.Body).Decode(&tokenData)
+	err := c.Request.Post("https://bots.qq.com/app/getAppAccessToken", initData, &tokenData, make(map[string]string))
 	if err != nil {
-		return "", fmt.Errorf("Decode json failed: %w", err)
+		return "", err
 	}
 	if tokenData.AccessToken == "" {
 		return "", fmt.Errorf("Access token in data is null")
@@ -89,62 +74,45 @@ func (c *Client) GetAccessToken() (string, error) {
 	return tokenData.AccessToken, nil
 }
 
+func (c *Client) generateHeader() (map[string]string, error) {
+	var result map[string]string = make(map[string]string)
+	token, err := c.getAccessToken()
+	if err != nil {
+		return map[string]string{}, err
+	}
+	result["Authorization"] = fmt.Sprintf("QQBot %v", token)
+	result["Content-Type"] = "application/json"
+	return result, nil
+}
+
 // 发送群消息
 func (c *Client) SendGroupMessage(msg structers.Message, groupId string) error {
 	// 从消息生成JSON
 	data := msg.GenerateJSON()
-	// 构造请求
-	req, err := http.NewRequest("POST", fmt.Sprintf("%v/v2/groups/%v/messages", c.ProxyAPI, groupId), bytes.NewBuffer(data))
+	// 获取请求头
+	header, err := c.generateHeader()
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Content-Type", "application/json")
-	// 生成Token
-	token, err := c.GetAccessToken()
+	err = c.Request.Post(fmt.Sprintf("%v/v2/groups/%v/messages", c.ProxyAPI, groupId), data, nil, header)
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Authorization", fmt.Sprintf("QQBot %v", token))
-	// 发送请求
-	resp, err := c.Request.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	// 读取响应
-	if resp.StatusCode == http.StatusOK {
-		return nil
-	} else {
-		return fmt.Errorf("Request failed with code: %v", resp.StatusCode)
-	}
+	return nil
 }
 
 // 发送私信消息
 func (c *Client) SendPrivateMessage(msg structers.Message, userId string) error {
 	// 从消息生成JSON
 	data := msg.GenerateJSON()
-	// 构造请求
-	req, err := http.NewRequest("POST", fmt.Sprintf("%v/v2/users/%v/messages", c.ProxyAPI, userId), bytes.NewBuffer(data))
+	// 获取请求头
+	header, err := c.generateHeader()
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Content-Type", "application/json")
-	// 生成Token
-	token, err := c.GetAccessToken()
+	err = c.Request.Post(fmt.Sprintf("%v/v2/users/%v/messages", c.ProxyAPI, userId), data, nil, header)
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Authorization", fmt.Sprintf("QQBot %v", token))
-	// 发送请求
-	resp, err := c.Request.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	// 读取响应
-	if resp.StatusCode == http.StatusOK {
-		return nil
-	} else {
-		return fmt.Errorf("Request failed with code: %v", resp.StatusCode)
-	}
+	return nil
 }

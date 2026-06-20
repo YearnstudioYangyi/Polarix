@@ -17,6 +17,7 @@ import (
 	"botOffical/lib/context"
 	"botOffical/lib/plugin"
 	"botOffical/lib/qqapi"
+	"botOffical/lib/requests"
 	"botOffical/lib/structers"
 	_ "botOffical/plugins"
 
@@ -45,6 +46,8 @@ type MessageData struct {
 	PlainToken string `json:"plain_token"`
 	EventTs    string `json:"event_ts"`
 }
+
+var requestsClient *requests.Client = requests.Init(5)
 
 func initConfig() structers.AppConfig {
 	file, err := os.ReadFile("./config.json")
@@ -163,7 +166,8 @@ func processPayload(payload Payload, client *qqapi.Client) {
 					GroupId:     payload.Data.GroupOpenID,
 					MessageId:   payload.Data.Id,
 				},
-				Parserd: parsed,
+				Parserd:  parsed,
+				Requests: requestsClient,
 			}
 			_ = cmd.Handle(&ctx)
 		}
@@ -174,13 +178,13 @@ func main() {
 	appConfig := initConfig()
 
 	r := gin.Default()
-	client := qqapi.Init(appConfig.AppId, appConfig.AppSecret, appConfig.ProxyAPI)
+	client := qqapi.Init(appConfig.AppId, appConfig.AppSecret, appConfig.ProxyAPI, requestsClient)
 
 	// 签名校验中间件
 	r.Use(VerifySignature(appConfig.AppSecret))
 
 	r.POST("/webhook", func(c *gin.Context) {
-		// 中间件已处理
+		// 中间件已提取
 		var payload Payload
 		if err := c.ShouldBindJSON(&payload); err != nil {
 			return

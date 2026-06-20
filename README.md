@@ -78,7 +78,7 @@ func echoHandle(ctx *context.Context) error {
 > Prefix
 指令前缀, 只有以该前缀开头的指令会传入插件
 
-根据注册顺序, 后注册的插件如果根之前注册插件的前缀相同, 会发生**覆盖**
+根据注册顺序, 后注册的插件如果跟之前注册插件的前缀相同, 会发生**覆盖**
 
 ##### 使用权限
 > Role | 枚举值: **constant.RoleMember** | **constant.RoleAdmin** | **constant.RoleOwner**
@@ -88,6 +88,7 @@ func echoHandle(ctx *context.Context) error {
 
 ##### 处理函数
 > Handle | type HandleFunc func(*context.Context) error
+
 其中`*context.Context`为上下文对象, 其API用法见后文
 
 函数需要返回一个`error`, 会显示在日志里, 不会发送到QQ里
@@ -96,6 +97,7 @@ func echoHandle(ctx *context.Context) error {
 > Parser & ParserTarget
 > 
 > 两者必须合用, 否则可能引发panic或预期之外的行为
+
 解析器接受一个`Parser`接口, 其需要一个`Parse(rawMsg string, result any) error`函数, 该函数接收**原始消息**及**接收者指针**并返回一个`error`
 
 - 当`Parser`没有被指定时, 默认使用`DefaultParser`(lib/parser/default.go), 除此之外还提供一个`PositionalParser`解析器
@@ -128,9 +130,11 @@ import	_ "botOffical/plugins/ping"
 ##### Reply函数
 
 直接调用传入的`ctx`的`Reply`函数:
+
 ```go
 ctx.Reply("", structers.PlainText)
 ```
+
 第一个参数是**消息内容**, 第二个参数是**消息类型**
 
 **消息类型**为`MessageType`枚举, 可以选择`PlainText`及`Markdown`两种类型, 第一个为`纯文本`, 第二个为`Markdown`
@@ -141,12 +145,16 @@ ctx.Reply("", structers.PlainText)
 > 该对象的定义位于**lib/structers/msg.go**
 
 1. 构造Message对象
+
 你至少需要定义如下内容:
+
 - Content
 - MessageType
+
 参数的含义与Reply中的一致
 
 2. 发送消息
+
 调用`ctx.Client.SendGroupMessage`或`ctx.Client.SendPrivateMessage`(根据发送目标)
 
 当调用`ctx.Client.SendGroupMessage`时, 默认为**主动推送**消息, 如果需要采取**被动回复**(这两者区别见QQ官方文档), 需要在`Message`结构体中填入`MessageId`参数, 指定回复消息的ID
@@ -156,15 +164,19 @@ ctx.Reply("", structers.PlainText)
 #### 消息内容
 
 ##### 原始消息
+
 位于`ctx.Message.Content`
 
 ##### 解析器产物
+
 位于`ctx.Parserd`, 必须进行**类型断言**
 
 ##### 消息ID
+
 位于`ctx.Message.MessageId`
 
 ##### 消息对象
+
 位于`ctx.Message`
 
 #### 发送者信息
@@ -174,6 +186,26 @@ ctx.Reply("", structers.PlainText)
 #### 消息来源
 
 目前仅存在两种枚举: `PrivateMessage`及`GroupMessage`
+
+#### 公共请求对象
+
+插件的请求应该调用上下文中的`Requests`, 该对象目前支持两种请求方式: `ctx.Requests.Get`及`ctx.Requests.Post`
+
+##### Get请求
+
+参数: `Get(url string, result any, headers map[string]string)`
+
+- url 请求目标
+- result 返回结果绑定目标(需要包含json标签的结构体), nil时不解析
+- headers 请求头
+
+##### Post请求
+
+参数: `Post(url string, body any, result any, headers map[string]string)`
+
+- url 请求目标
+- body 请求体(可以为`[]byte`或者为可以被`json.Marshal`的对象)
+- result/headers 同上
 
 ### TODO
 
