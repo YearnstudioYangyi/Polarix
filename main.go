@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	"botOffical/lib/constant"
+	"botOffical/lib/constant/EventType"
 	"botOffical/lib/context"
 	"botOffical/lib/plugin"
 	"botOffical/lib/qqapi"
@@ -29,10 +30,11 @@ import (
 
 // 通用 Payload 结构
 type Payload struct {
-	ID   string      `json:"id"`
-	Op   int         `json:"op"`
-	Data MessageData `json:"d"`
-	T    string      `json:"t"`
+	ID        string              `json:"id"`
+	Op        int                 `json:"op"`
+	Data      MessageData         `json:"d"`
+	T         string              `json:"t"`
+	EventType EventType.EventType `json:"-"`
 }
 
 type MessageData struct {
@@ -125,8 +127,8 @@ func VerifySignature(botSecret string) gin.HandlerFunc {
 }
 
 func processPayload(payload Payload, client *qqapi.Client) {
-	switch payload.T {
-	case "GROUP_MESSAGE_CREATE", "GROUP_AT_MESSAGE_CREATE":
+	switch payload.EventType {
+	case EventType.GROUP_AT_MESSAGE_CREATE, EventType.GROUP_MESSAGE_CREATE:
 		payload.Data.Content = strings.TrimSpace(payload.Data.Content)
 		msgs := strings.Split(payload.Data.Content, " ")
 		var prefix = msgs[0]
@@ -221,6 +223,10 @@ func main() {
 		}
 
 		c.Status(http.StatusOK)
+		if !EventType.IsValidEventType(payload.T) {
+			return
+		}
+		payload.EventType = EventType.EventType(payload.T)
 		go processPayload(payload, &client)
 	})
 
@@ -242,7 +248,7 @@ func InitTemplate() error {
 			return nil
 		}
 
-		// 检查文件后缀是否为.md
+		// 检查文件后缀是否为 .md
 		if filepath.Ext(path) == ".md" {
 			fileName := strings.TrimSuffix(filepath.Base(path), ".md")
 			content, err := os.ReadFile(path)
