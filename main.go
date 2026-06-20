@@ -91,6 +91,10 @@ func main() {
 			// log.Printf("")
 			cmd, ok := plugin.GetCommand(prefix)
 			if ok {
+				if !cmd.Role.CanUse(payload.Data.Author.Role) {
+					log.Printf("用户%v无权限使用%v指令, 最低要求权限: %v, 用户权限: %v", payload.Data.Author.Username, cmd.Prefix, cmd.Role, payload.Data.Author.Role)
+					break
+				}
 				log.Printf("匹配到指令: %v, 来自插件: %v", cmd.Prefix, cmd.PluginId)
 				var parsed any
 				if cmd.ParserTarget != nil {
@@ -99,6 +103,7 @@ func main() {
 					err := cmd.Parser.Parse(payload.Data.Content, result.Interface())
 					if err != nil {
 						log.Printf("[Error:PluginParser:%v]: %v", cmd.PluginId, err)
+						break
 					}
 					parsed = result.Interface()
 				} else {
@@ -107,6 +112,7 @@ func main() {
 					err := cmd.Parser.Parse(payload.Data.Content, &result)
 					if err != nil {
 						log.Printf("[Error:PluginParser:%v]: %v", cmd.PluginId, err)
+						break
 					}
 					parsed = result
 				}
@@ -127,12 +133,12 @@ func main() {
 				err := cmd.Handle(&ctx)
 				if err != nil {
 					log.Printf("[Error:Plugin:%v]: %v", cmd.PluginId, err)
+					break
 				}
 			}
-
-		default:
-			c.Status(http.StatusOK)
 		}
+		c.Status(http.StatusOK)
+		return
 	})
 
 	log.Printf("Server running on %v", appConfig.Port)

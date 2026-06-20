@@ -14,6 +14,17 @@ const (
 	RoleMember UserRole = "member"
 )
 
+func (require UserRole) CanUse(user UserRole) bool {
+	switch require {
+	case RoleOwner:
+		return user == RoleOwner
+	case RoleAdmin:
+		return user == RoleAdmin || user == RoleOwner
+	default:
+		return true
+	}
+}
+
 // UnmarshalJSON 实现 Unmarshaler 接口以进行校验
 func (r *UserRole) UnmarshalJSON(b []byte) error {
 	// 去掉 JSON 字符串前后的引号

@@ -24,7 +24,7 @@ func init() {
 	var commands []*plugin.Command
 	commands = append(commands, &plugin.Command{
 		Prefix:       "/ping",
-		Role:         constant.RoleMember,
+		Role:         constant.RoleAdmin,
 		Describle:    "发起ping请求",
 		Handle:       Ping,
 		Parser:       &parser.PositionalParser{},
@@ -46,6 +46,7 @@ func Ping(ctx *context.Context) error {
 	// 尝试解析目标 IP
 	dstAddr, err := net.ResolveIPAddr("ip4", args.Ip)
 	if err != nil {
+		ctx.Reply(fmt.Sprintf("### 解析结果\n```\n目标 %v 解析失败\n```", args.Ip), structers.Markdown)
 		return fmt.Errorf("解析IP失败: %v", err)
 	}
 
