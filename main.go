@@ -138,7 +138,6 @@ func main() {
 			}
 		}
 		c.Status(http.StatusOK)
-		return
 	})
 
 	log.Printf("Server running on %v", appConfig.Port)
