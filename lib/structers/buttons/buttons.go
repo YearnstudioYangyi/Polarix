@@ -59,10 +59,6 @@ type keyboardJson struct {
 	Content Keyboard `json:"content"`
 }
 
-type jsonData struct {
-	Keyboard keyboardJson `json:"keyboard"`
-}
-
 func GenerateJson(keyboard Keyboard) ([]byte, error) {
 	if len(keyboard.Rows) == 0 {
 		return make([]byte, 0), nil
@@ -116,7 +112,7 @@ func GenerateJson(keyboard Keyboard) ([]byte, error) {
 }
 
 func (k *Keyboard) AppendButton(id string, label string, visited string, style ButtonStyle.ButtonStyle, row int) (*Button, error) {
-	if row > 5 || row < 0 {
+	if row > 4 || row < 0 {
 		return nil, fmt.Errorf("Row must between 0 and 5, but received %v", row)
 	}
 	button := Button{
