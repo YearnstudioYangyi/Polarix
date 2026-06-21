@@ -79,7 +79,9 @@ func (c *Client) do(req *http.Request, result any) error {
 
 	// 校验 HTTP 状态码
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+		// 读取 Body 内容用于错误信息
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("unexpected status code: %d, body: %s", resp.StatusCode, string(bodyBytes))
 	}
 
 	// 如果传入了接收结果的变量，则解析 JSON

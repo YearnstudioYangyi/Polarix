@@ -2,9 +2,13 @@ package echo
 
 import (
 	"botOffical/lib/constant"
+	"botOffical/lib/constant/Button/ActionPermissionType"
+	"botOffical/lib/constant/Button/ButtonStyle"
 	"botOffical/lib/context"
 	"botOffical/lib/plugin"
 	"botOffical/lib/structers"
+	"botOffical/lib/structers/buttons"
+	"botOffical/lib/templates"
 	"fmt"
 )
 
@@ -23,6 +27,13 @@ func init() {
 		Role:      constant.RoleMember,
 		Describle: "获取群OpenID",
 		Handle:    getGroupId,
+	})
+
+	commands = append(commands, &plugin.Command{
+		Prefix:    "/uid",
+		Role:      constant.RoleMember,
+		Describle: "获取用户ID",
+		Handle:    getUserId,
 	})
 
 	self := plugin.PluginConfig{
@@ -44,4 +55,38 @@ func getGroupId(ctx *context.Context) error {
 		MessageType: structers.Markdown,
 	}
 	return ctx.Client.SendGroupMessage(msg, ctx.Message.GroupId)
+}
+
+func getUserId(ctx *context.Context) error {
+	tmp, err := templates.FillMarkdownTemplate("UserIdCard", templates.Args{
+		"id":       ctx.Message.UserId,
+		"union_id": ctx.Message.UnionId,
+		"msg_id":   ctx.Message.MessageId,
+	})
+	if err != nil {
+		return err
+	}
+	// ctx.Reply(tmp, structers.Markdown)
+	keyboard := &buttons.Keyboard{}
+	button, err := keyboard.AppendButton("1", "查询我的", "查询我的", ButtonStyle.Blue, 0)
+	if err != nil {
+		return err
+	}
+	button.SetAutoCommand("/uid", true, false)
+	button.SetPermission(ActionPermissionType.AllUser)
+	button.SetUnsupportedTip("不支持按钮")
+	msg := structers.Message{
+		Content:     tmp,
+		MessageId:   ctx.Message.MessageId,
+		GroupId:     ctx.Message.GroupId,
+		Keyboard:    *keyboard,
+		MessageType: structers.Markdown,
+	}
+	_, err = buttons.GenerateJson(msg.Keyboard)
+	// log.Printf("[Debug]生成的JSON: %v", string(a))
+	if err != nil {
+		return err
+	}
+	return ctx.Client.SendGroupMessage(msg, msg.GroupId)
+	// return nil
 }

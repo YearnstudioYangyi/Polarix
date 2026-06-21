@@ -138,6 +138,7 @@ func processPayload(payload Payload, client *qqapi.Client) {
 
 		cmd, ok := plugin.GetCommand(prefix)
 		if ok {
+			// log.Printf("捕获到%v指令, 来自插件: %v", cmd.Prefix, cmd.PluginId)
 			if !cmd.Role.CanUse(payload.Data.Author.Role) {
 				log.Printf("用户%v无权限使用%v指令", payload.Data.Author.Username, cmd.Prefix)
 				return
@@ -174,7 +175,10 @@ func processPayload(payload Payload, client *qqapi.Client) {
 				Parserd:  parsed,
 				Requests: requestsClient,
 			}
-			_ = cmd.Handle(&ctx)
+			err := cmd.Handle(&ctx)
+			if err != nil {
+				log.Printf("[Error]插件: %v 在执行 %v 指令时报错: %v\n", cmd.PluginId, cmd.Prefix, err)
+			}
 		}
 	}
 }

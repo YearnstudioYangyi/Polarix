@@ -89,6 +89,7 @@ func (c *Client) generateHeader() (map[string]string, error) {
 func (c *Client) SendGroupMessage(msg structers.Message, groupId string) error {
 	// 从消息生成JSON
 	data := msg.GenerateJSON()
+	// log.Printf("[Debug]完整请求JSON: %v", string(data))
 	// 获取请求头
 	header, err := c.generateHeader()
 	if err != nil {
