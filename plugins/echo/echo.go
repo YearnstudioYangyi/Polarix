@@ -72,9 +72,7 @@ func getUserId(ctx *context.Context) error {
 	if err != nil {
 		return err
 	}
-	button.SetAutoCommand("/uid", true, false)
-	button.SetPermission(ActionPermissionType.AllUser)
-	button.SetUnsupportedTip("不支持按钮")
+	button.SetAutoCommand("/uid", true, false).SetPermission(ActionPermissionType.AllUser).SetUnsupportedTip("不支持按钮")
 	msg := structers.Message{
 		Content:     tmp,
 		MessageId:   ctx.Message.MessageId,

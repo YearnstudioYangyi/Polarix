@@ -136,32 +136,38 @@ func (k *Keyboard) AppendButton(id string, label string, visited string, style B
 	return &k.Rows[row].List[len(k.Rows[row].List)-1], nil
 }
 
-func (button *Button) SetAutoCommand(content string, autoSend bool, anchor bool) {
+func (button *Button) SetAutoCommand(content string, autoSend bool, anchor bool) *Button {
 	button.Action.Anchor = anchor
 	button.Action.Msg = content
 	button.Action.Type = ActionType.Command
 	button.Action.AutoSend = autoSend
+	return button
 }
 
-func (button *Button) SetHref(url string) {
+func (button *Button) SetHref(url string) *Button {
 	button.Action.Type = ActionType.Link
 	button.Action.Url = url
+	return button
 }
 
-func (button *Button) SetCallback(data string) {
+func (button *Button) SetCallback(data string) *Button {
 	button.Action.CallbackData = data
 	button.Action.Type = ActionType.Callback
+	return button
 }
 
-func (button *Button) SetPermission(required ActionPermissionType.AllowedPermission) {
+func (button *Button) SetPermission(required ActionPermissionType.AllowedPermission) *Button {
 	button.Permission.Type = required
+	return button
 }
 
-func (button *Button) SetUserWhiteList(users []string) {
+func (button *Button) SetUserWhiteList(users []string) *Button {
 	button.Permission.Type = ActionPermissionType.SomeUser
 	button.Permission.SpecifyUserIds = users
+	return button
 }
 
-func (button *Button) SetUnsupportedTip(tip string) {
+func (button *Button) SetUnsupportedTip(tip string) *Button {
 	button.Action.UnsupportTips = tip
+	return button
 }
