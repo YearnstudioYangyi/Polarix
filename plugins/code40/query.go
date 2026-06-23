@@ -1,12 +1,12 @@
 package code40
 
 import (
-	"botOffical/lib/constant"
-	"botOffical/lib/context"
-	"botOffical/lib/parser"
-	"botOffical/lib/plugin"
-	"botOffical/lib/structers"
-	"botOffical/lib/templates"
+	"Plrx/lib/constant"
+	"Plrx/lib/context"
+	"Plrx/lib/parser"
+	"Plrx/lib/plugin"
+	"Plrx/lib/structers"
+	"Plrx/lib/templates"
 	"fmt"
 	"reflect"
 )

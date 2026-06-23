@@ -1,7 +1,7 @@
 package plugins
 
 import (
-	_ "botOffical/plugins/code40"
-	_ "botOffical/plugins/echo"
-	_ "botOffical/plugins/ping"
+	_ "Plrx/plugins/code40"
+	_ "Plrx/plugins/echo"
+	_ "Plrx/plugins/ping"
 )

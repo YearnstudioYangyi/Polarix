@@ -1,11 +1,11 @@
 package ping
 
 import (
-	"botOffical/lib/constant"
-	"botOffical/lib/context"
-	"botOffical/lib/parser"
-	"botOffical/lib/plugin"
-	"botOffical/lib/structers"
+	"Plrx/lib/constant"
+	"Plrx/lib/context"
+	"Plrx/lib/parser"
+	"Plrx/lib/plugin"
+	"Plrx/lib/structers"
 	"fmt"
 	"net"
 	"os"

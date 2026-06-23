@@ -1,8 +1,8 @@
 package qqapi
 
 import (
-	"botOffical/lib/requests"
-	"botOffical/lib/structers"
+	"Plrx/lib/requests"
+	"Plrx/lib/structers"
 	"fmt"
 	"strconv"
 	"sync"

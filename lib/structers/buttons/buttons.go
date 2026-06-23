@@ -1,9 +1,9 @@
 package buttons
 
 import (
-	"botOffical/lib/constant/Button/ActionPermissionType"
-	"botOffical/lib/constant/Button/ActionType"
-	"botOffical/lib/constant/Button/ButtonStyle"
+	"Plrx/lib/constant/Button/ActionPermissionType"
+	"Plrx/lib/constant/Button/ActionType"
+	"Plrx/lib/constant/Button/ButtonStyle"
 	"encoding/json"
 	"fmt"
 )

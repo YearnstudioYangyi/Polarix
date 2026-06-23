@@ -1,9 +1,9 @@
 package context
 
 import (
-	"botOffical/lib/qqapi"
-	"botOffical/lib/requests"
-	"botOffical/lib/structers"
+	"Plrx/lib/qqapi"
+	"Plrx/lib/requests"
+	"Plrx/lib/structers"
 )
 
 type Context struct {

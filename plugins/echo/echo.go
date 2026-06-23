@@ -1,14 +1,14 @@
 package echo
 
 import (
-	"botOffical/lib/constant"
-	"botOffical/lib/constant/Button/ActionPermissionType"
-	"botOffical/lib/constant/Button/ButtonStyle"
-	"botOffical/lib/context"
-	"botOffical/lib/plugin"
-	"botOffical/lib/structers"
-	"botOffical/lib/structers/buttons"
-	"botOffical/lib/templates"
+	"Plrx/lib/constant"
+	"Plrx/lib/constant/Button/ActionPermissionType"
+	"Plrx/lib/constant/Button/ButtonStyle"
+	"Plrx/lib/context"
+	"Plrx/lib/plugin"
+	"Plrx/lib/structers"
+	"Plrx/lib/structers/buttons"
+	"Plrx/lib/templates"
 	"fmt"
 )
 

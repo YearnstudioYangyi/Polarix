@@ -1,7 +1,7 @@
 package structers
 
 import (
-	"botOffical/lib/structers/buttons"
+	"Plrx/lib/structers/buttons"
 	"encoding/json"
 )
 

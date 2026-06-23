@@ -1,7 +1,7 @@
 package plugin
 
 import (
-	"botOffical/lib/parser"
+	"Plrx/lib/parser"
 	"sync"
 )
 

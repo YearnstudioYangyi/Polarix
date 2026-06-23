@@ -1,7 +1,7 @@
 package templates
 
 import (
-	"botOffical/lib/images"
+	"Plrx/lib/images"
 	"fmt"
 	"regexp"
 	"strings"

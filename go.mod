@@ -1,4 +1,4 @@
-module botOffical
+module Plrx
 
 go 1.25.4
 

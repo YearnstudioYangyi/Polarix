@@ -1,9 +1,9 @@
 package plugin
 
 import (
-	"botOffical/lib/constant"
-	"botOffical/lib/context"
-	"botOffical/lib/parser"
+	"Plrx/lib/constant"
+	"Plrx/lib/context"
+	"Plrx/lib/parser"
 	"reflect"
 )
 

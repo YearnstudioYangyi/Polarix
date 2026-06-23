@@ -39,10 +39,10 @@
 package echo
 
 import (
-	"botOffical/lib/constant"
-	"botOffical/lib/context"
-	"botOffical/lib/plugin"
-	"botOffical/lib/structers"
+	"Plrx/lib/constant"
+	"Plrx/lib/context"
+	"Plrx/lib/plugin"
+	"Plrx/lib/structers"
 )
 
 func init() {
@@ -118,7 +118,7 @@ func echoHandle(ctx *context.Context) error {
 在`plugins/register.go`中**匿名导入**你的插件所在的包
 
 ```go
-import	_ "botOffical/plugins/ping"
+import	_ "Plrx/plugins/ping"
 
 ```
 
