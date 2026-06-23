@@ -135,7 +135,6 @@ func processPayload(payload Payload, client *qqapi.Client) {
 		if len(msgs) > 1 && (strings.HasPrefix(msgs[0], "\u003c@") || strings.HasPrefix(msgs[0], "<@")) && (strings.HasSuffix(msgs[0], ">")) {
 			prefix = msgs[1]
 		}
-
 		cmd, ok := plugin.GetCommand(prefix)
 		if ok {
 			// log.Printf("捕获到%v指令, 来自插件: %v", cmd.Prefix, cmd.PluginId)
@@ -186,7 +185,7 @@ func processPayload(payload Payload, client *qqapi.Client) {
 func main() {
 	appConfig := initConfig()
 	client := qqapi.Init(appConfig.AppId, appConfig.AppSecret, appConfig.ProxyAPI, requestsClient)
-	err := InitTemplate()
+	templateCount, err := InitTemplate()
 	if err != nil {
 		log.Fatalf("Failed when scan Markdown template: %v", err)
 	}
@@ -235,10 +234,13 @@ func main() {
 	})
 
 	log.Printf("Server running on %v", appConfig.Port)
+	log.Printf("注册了%v个Markdown模板", templateCount)
+	log.Printf("注册了%v个指令", plugin.GetCommandCount())
 	r.Run(fmt.Sprintf(":%v", appConfig.Port))
 }
 
-func InitTemplate() error {
+func InitTemplate() (int, error) {
+	count := 0
 	// Markdown模板
 	root := "templates/markdown"
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
@@ -260,13 +262,14 @@ func InitTemplate() error {
 				return err
 			}
 			templates.NewMarkdownTemplate(fileName, string(content))
+			count++
 		}
 
 		return nil
 	})
 
 	if err != nil {
-		return err
+		return 0, err
 	}
-	return nil
+	return count, nil
 }

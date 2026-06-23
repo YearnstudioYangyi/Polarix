@@ -2,6 +2,8 @@ package plugin
 
 import (
 	"Plrx/lib/parser"
+	"fmt"
+	"strings"
 	"sync"
 )
 
@@ -30,4 +32,17 @@ func GetCommand(name string) (*Command, bool) {
 	defer mu.RUnlock()
 	cmd, ok := GlobalCommands[name]
 	return cmd, ok
+}
+
+func GetCommandCount() int {
+	return len(GlobalCommands)
+}
+
+func GetHelpText() string {
+	var text strings.Builder
+	text.WriteString("帮助菜单")
+	for prefix, cmd := range GlobalCommands {
+		fmt.Fprintf(&text, "%v -- %v", prefix, cmd.Describle)
+	}
+	return text.String()
 }
