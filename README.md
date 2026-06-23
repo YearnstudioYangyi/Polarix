@@ -1,4 +1,8 @@
-## QQ官方机器人 轻量开发框架
+## Polarix 北极星
+
+> QQ官方机器人 轻量开发框架
+>
+> Without AI feature
 
 ### 配置文件
 在根目录下新建`config.json`, 并按照下方格式填写
