@@ -14,6 +14,7 @@ const (
 	RoleMember UserRole = "member"
 )
 
+// 传入的用户权限是否大于等于需要的权限
 func (require UserRole) CanUse(user UserRole) bool {
 	switch require {
 	case RoleOwner:

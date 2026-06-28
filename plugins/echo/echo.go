@@ -36,6 +36,20 @@ func init() {
 		Handle:    getUserId,
 	})
 
+	commands = append(commands, &plugin.Command{
+		Prefix:    "/授权",
+		Role:      constant.RoleMember,
+		Describle: "获取群聊授权",
+		Handle:    getPermission,
+	})
+
+	commands = append(commands, &plugin.Command{
+		Prefix:    "权限申请引导",
+		Role:      constant.RoleMember,
+		Describle: "引导获取群聊授权",
+		Handle:    getPermission,
+	})
+
 	self := plugin.PluginConfig{
 		Id:       "echo",
 		Commands: commands,
@@ -44,8 +58,7 @@ func init() {
 }
 
 func echoHandle(ctx *context.Context) error {
-	// log.Printf("传入到处理函数, 消息内容: %v, 来源群: %v", ctx.Message.Content, ctx.Message.GroupId)
-	return ctx.Client.SendGroupMessage(*ctx.Message, ctx.Message.GroupId)
+	return ctx.Reply("## 测试", structers.Markdown)
 	// return nil
 }
 
@@ -68,11 +81,12 @@ func getUserId(ctx *context.Context) error {
 	}
 	// ctx.Reply(tmp, structers.Markdown)
 	keyboard := &buttons.Keyboard{}
-	button, err := keyboard.AppendButton("1", "查询我的", "查询我的", ButtonStyle.Blue, 0)
+	button, err := keyboard.AppendButton("1", "测试", "测试", ButtonStyle.Blue, 0)
 	if err != nil {
 		return err
 	}
-	button.SetAutoCommand("/uid", true, false).SetPermission(ActionPermissionType.AllUser).SetUnsupportedTip("不支持按钮")
+	button.SetHref("https://club.vip.qq.com/transfer?open_kuikly_info=%7B%22page_name%22%3A%20%22ai_group_service_agreement_pop_page%22%2C%22groupCode%22%3A{%v}%2C%22botUin%22%3A{%v}%2C%22botUid%22%3A%22{%v}%22%2C%22screen%22%3A1%7D").SetPermission(ActionPermissionType.AllUser).SetUnsupportedTip("不支持按钮")
+
 	msg := structers.Message{
 		Content:     tmp,
 		MessageId:   ctx.Message.MessageId,
@@ -87,4 +101,43 @@ func getUserId(ctx *context.Context) error {
 	}
 	return ctx.Client.SendGroupMessage(msg, msg.GroupId)
 	// return nil
+}
+
+func getPermission(ctx *context.Context) error {
+	tmp, err := templates.FillMarkdownTemplate("ReplyPermission", templates.Args{})
+	if err != nil {
+		return err
+	}
+	// ctx.Reply(tmp, structers.Markdown)
+	keyboard := &buttons.Keyboard{}
+	button, err := keyboard.AppendButton("1", "测试", "测试", ButtonStyle.Blue, 0)
+	if err != nil {
+		return err
+	}
+	button.SetHref("https://club.vip.qq.com/transfer?open_kuikly_info=%7B%22page_name%22%3A%20%22ai_group_service_agreement_pop_page%22%2C%22groupCode%22%3A{%v}%2C%22botUin%22%3A{%v}%2C%22botUid%22%3A%22{%v}%22%2C%22screen%22%3A1%7D").SetPermission(ActionPermissionType.AllUser).SetUnsupportedTip("不支持按钮")
+
+	msg := structers.Message{
+		Content:     tmp,
+		MessageId:   ctx.Message.MessageId,
+		GroupId:     ctx.Message.GroupId,
+		Keyboard:    *keyboard,
+		MessageType: structers.Markdown,
+	}
+	_, err = buttons.GenerateJson(msg.Keyboard)
+	// log.Printf("[Debug]生成的JSON: %v", string(a))
+	if err != nil {
+		return err
+	}
+	return ctx.Client.SendGroupMessage(msg, msg.GroupId)
+	// return nil
+}
+
+func guideReply(ctx *context.Context) error {
+	tmp, err := templates.FillMarkdownTemplate("GuideReply", templates.Args{})
+	if err != nil {
+		return err
+	}
+	keyboard := &buttons.Keyboard{}
+	button, _ := keyboard.AppendButton("1", "点击输入群号", "请输入群号", ButtonStyle.Blue, 0)
+	button.SetAutoCommand("<@>")
 }

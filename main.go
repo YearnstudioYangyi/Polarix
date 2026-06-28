@@ -127,6 +127,8 @@ func VerifySignature(botSecret string) gin.HandlerFunc {
 }
 
 func processPayload(payload Payload, client *qqapi.Client) {
+	// js, _ := json.MarshalIndent(payload, "", "")
+	// log.Printf("[Debug]Raw request: %v", string(js))
 	switch payload.EventType {
 	case EventType.GROUP_AT_MESSAGE_CREATE, EventType.GROUP_MESSAGE_CREATE:
 		payload.Data.Content = strings.TrimSpace(payload.Data.Content)
