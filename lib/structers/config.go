@@ -12,4 +12,6 @@ type AppConfig struct {
 	AppSecret string   `json:"secret"`
 	Plugins   []Plugin `json:"plugins"`
 	ProxyAPI  string   `json:"proxy"`
+	Uin       uint64   `json:"uin"`
+	Uid       string   `json:"uid"`
 }
