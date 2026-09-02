@@ -47,33 +47,29 @@ type Attachment struct {
 	URL         string `json:"url"`
 }
 
-// 发送消息
+// Send 发送消息。
 func (msg *Message) Send() error {
-	// 此消息是否已被使用
 	if msg.used {
 		return &MessageUsed{
 			MessageId: msg.MsgId,
 		}
 	}
-	// 尝试增加计数
 	seq, err := msg.Count()
-	// 失败
 	if err != nil {
 		return err
 	}
-	// 设置消息编号
 	msg.MsgSeq = seq
 
-	// 解析消息
 	var data []byte
-	// 如果有传入解析接口
+	// 发送前预处理（markdown 图片内嵌、@保护等）
+	if pre, ok := msg.MarshalInterface.(contract.PreSend); ok {
+		pre.Prepare()
+	}
 	if msg.MarshalInterface != nil {
 		data, err = msg.MarshalInterface.Marshal()
 	} else {
-		// 否则使用内建
 		data, err = json.Marshal(msg)
 	}
-	// 解析出错
 	if err != nil {
 		return &JSONMarshalError{
 			Err: err,
@@ -84,14 +80,12 @@ func (msg *Message) Send() error {
 		panic("QQAPI Clinet空指针异常")
 	}
 
-	// 匹配消息类型
 	switch msg.Target {
 	case constant.GroupMessage:
 		return msg.Qapi.SendGroupMessage(data, msg.GroupId)
 	case constant.PrivateMessage:
 		return msg.Qapi.SendPrivateMessage(data, msg.UserId)
 	default:
-		// TODO: 更换为类型
 		return fmt.Errorf("Unknown message target type: %v", msg.Target)
 	}
 }

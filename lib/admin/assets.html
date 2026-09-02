@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>图床管理 - Polarix</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#f0f2f5;color:#333;padding:24px}
+.container{max-width:1200px;margin:0 auto}
+.header{display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:12px}
+.header h1{font-size:24px;font-weight:600}
+.header-actions{display:flex;align-items:center;gap:12px}
+.badge-count{background:#e8e8e8;border-radius:12px;padding:4px 12px;font-size:14px;color:#666}
+.btn{padding:8px 20px;border:none;border-radius:6px;cursor:pointer;font-size:14px;font-weight:500}
+.btn-primary{background:#1677ff;color:#fff}
+.btn-primary:hover{background:#4096ff}
+.btn-primary:disabled{background:#91caff;cursor:not-allowed}
+.section{background:#fff;border-radius:8px;padding:20px;margin-bottom:20px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.section h2{font-size:16px;font-weight:600;margin-bottom:12px;color:#444}
+#whitelist{width:100%;padding:8px 12px;border:1px solid #d9d9d9;border-radius:6px;font-size:14px;font-family:inherit;resize:vertical;min-height:70px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:16px}
+.card{background:#fff;border-radius:8px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,.08);transition:box-shadow .2s}
+.card:hover{box-shadow:0 2px 8px rgba(0,0,0,.12)}
+.card-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid #f0f0f0}
+.card-name{font-size:16px;font-weight:600}
+.card-badges{display:flex;gap:6px;align-items:center}
+.badge{padding:2px 8px;border-radius:4px;font-size:11px;font-weight:500}
+.badge-enabled{background:#e6fffb;color:#13c2c2;border:1px solid #87e8de}
+.badge-disabled{background:#fff2f0;color:#ff4d4f;border:1px solid #ffccc7}
+.badge-secrets{background:#f6ffed;color:#52c41a;border:1px solid #b7eb8f}
+.card-body{display:flex;flex-direction:column;gap:12px}
+.field-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.field-row label{font-size:13px;color:#666;white-space:nowrap}
+.toggle-label{display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:#666}
+.toggle-label input[type=checkbox]{width:16px;height:16px;cursor:pointer}
+.priority-group{display:flex;align-items:center;gap:4px}
+.priority-group input[type=number]{width:52px;padding:4px 6px;border:1px solid #d9d9d9;border-radius:4px;font-size:13px;text-align:center}
+.priority-group button{width:26px;height:26px;border:1px solid #d9d9d9;border-radius:4px;background:#fff;cursor:pointer;font-size:14px;line-height:1;display:flex;align-items:center;justify-content:center}
+.priority-group button:hover{background:#f5f5f5}
+.config-field{margin-top:4px}
+.config-field label{display:block;font-size:12px;color:#888;margin-bottom:3px}
+.config-field input[type=text],.config-field input[type=password],.config-field input[type=number]{width:100%;padding:6px 10px;border:1px solid #d9d9d9;border-radius:4px;font-size:13px;font-family:monospace}
+.config-field input[readonly]{background:#f5f5f5;color:#999}
+.config-field .checkbox-label{display:flex;align-items:center;gap:6px;font-size:13px;color:#666;cursor:pointer}
+.config-field .checkbox-label input[type=checkbox]{width:15px;height:15px;cursor:pointer}
+.config-fields{margin-top:6px;display:flex;flex-direction:column;gap:8px}
+.placeholder-secrets{color:#52c41a;font-size:11px;font-style:italic;margin-top:2px}
+.placeholder-empty{color:#999;font-size:11px;font-style:italic;margin-top:2px}
+.save-status{position:fixed;bottom:24px;right:24px;padding:12px 20px;border-radius:8px;font-size:14px;box-shadow:0 4px 12px rgba(0,0,0,.15);z-index:1000;transition:opacity .3s;opacity:0}
+.save-status.show{opacity:1}
+.save-status.success{background:#f6ffed;color:#52c41a;border:1px solid #b7eb8f}
+.save-status.error{background:#fff2f0;color:#ff4d4f;border:1px solid #ffccc7}
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <h1>图床管理</h1>
+    <div class="header-actions">
+      <span class="badge-count" id="provider-count">加载中...</span>
+      <button class="btn btn-primary" id="btn-save" onclick="save()">保存</button>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>白名单域名前缀</h2>
+    <textarea id="whitelist" placeholder="每行一个域名前缀，如 https://q.qlogo.cn&#10;命中白名单的图片 URL 直通，不经过图床上传"></textarea>
+  </div>
+
+  <div class="grid" id="provider-grid"></div>
+</div>
+
+<div class="save-status" id="save-status"></div>
+
+<script>
+let _providers = [];
+
+async function load() {
+  const res = await fetch('/admin/api/assets');
+  if (!res.ok) { showStatus('加载失败', 'error'); return; }
+  const data = await res.json();
+  _providers = data.providers;
+  document.getElementById('whitelist').value = (data.whitelist || []).join('\n');
+  renderGrid(data.providers);
+  document.getElementById('provider-count').textContent = '已注册 ' + data.providers.length + ' 个 provider';
+}
+
+function renderGrid(providers) {
+  const grid = document.getElementById('provider-grid');
+  grid.innerHTML = '';
+  providers.forEach(p => {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.dataset.name = p.name;
+
+    // header
+    const header = document.createElement('div');
+    header.className = 'card-header';
+    header.innerHTML = '<span class="card-name">' + esc(p.name) + '</span>';
+
+    const badges = document.createElement('div');
+    badges.className = 'card-badges';
+    badges.innerHTML = '<span class="badge badge-' + (p.enabled ? 'enabled' : 'disabled') + '">' + (p.enabled ? '启用' : '禁用') + '</span>';
+    if (p.has_secrets) {
+      badges.innerHTML += '<span class="badge badge-secrets">密钥已配置</span>';
+    }
+    header.appendChild(badges);
+    card.appendChild(header);
+
+    // body
+    const body = document.createElement('div');
+    body.className = 'card-body';
+
+    // toggle + priority row
+    const row1 = document.createElement('div');
+    row1.className = 'field-row';
+
+    const toggle = document.createElement('label');
+    toggle.className = 'toggle-label';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.className = 'toggle-enabled';
+    cb.checked = p.enabled;
+    cb.onchange = function() { updateBadge(card, this.checked); };
+    toggle.appendChild(cb);
+    toggle.appendChild(document.createTextNode('启用'));
+    row1.appendChild(toggle);
+
+    const priGroup = document.createElement('div');
+    priGroup.className = 'priority-group';
+    const priLabel = document.createElement('label');
+    priLabel.textContent = '优先级';
+    priGroup.appendChild(priLabel);
+    const priDown = document.createElement('button');
+    priDown.textContent = '−';
+    priDown.type = 'button';
+    priDown.onclick = function() { const inp = card.querySelector('.input-priority'); inp.value = Math.max(0, parseInt(inp.value||0) - 10); };
+    priGroup.appendChild(priDown);
+    const priInp = document.createElement('input');
+    priInp.type = 'number';
+    priInp.className = 'input-priority';
+    priInp.min = 0;
+    priInp.value = p.priority || 0;
+    priGroup.appendChild(priInp);
+    const priUp = document.createElement('button');
+    priUp.textContent = '+';
+    priUp.type = 'button';
+    priUp.onclick = function() { const inp = card.querySelector('.input-priority'); inp.value = parseInt(inp.value||0) + 10; };
+    priGroup.appendChild(priUp);
+    row1.appendChild(priGroup);
+
+    body.appendChild(row1);
+
+    // config fields
+    if (p.schema && p.schema.length > 0) {
+      const fields = document.createElement('div');
+      fields.className = 'config-fields';
+      p.schema.forEach(f => {
+        const field = document.createElement('div');
+        field.className = 'config-field';
+
+        const label = document.createElement('label');
+        label.textContent = f.label;
+        if (f.required) label.textContent += ' *';
+        field.appendChild(label);
+
+        if (f.type === 'boolean') {
+          const cbWrap = document.createElement('label');
+          cbWrap.className = 'checkbox-label';
+          const cbInp = document.createElement('input');
+          cbInp.type = 'checkbox';
+          cbInp.className = 'field-config';
+          cbInp.dataset.key = f.key;
+          cbInp.dataset.type = 'boolean';
+          cbInp.checked = p.config && p.config[f.key] === true;
+          cbWrap.appendChild(cbInp);
+          cbWrap.appendChild(document.createTextNode(f.description || ''));
+          field.appendChild(cbWrap);
+        } else if (f.type === 'number') {
+          const inp = document.createElement('input');
+          inp.type = 'number';
+          inp.className = 'field-config';
+          inp.dataset.key = f.key;
+          inp.dataset.type = 'number';
+          inp.placeholder = f.description || f.label;
+          inp.value = p.config && p.config[f.key] != null ? p.config[f.key] : (f.default || '');
+          field.appendChild(inp);
+        } else {
+          const inp = document.createElement('input');
+          inp.type = f.type === 'password' ? 'password' : 'text';
+          inp.className = 'field-config';
+          inp.dataset.key = f.key;
+          inp.dataset.type = f.type;
+          inp.placeholder = f.description || f.label;
+          if (f.type === 'password') {
+            inp.value = '';
+            const hint = document.createElement('div');
+            hint.className = p.has_secrets ? 'placeholder-secrets' : 'placeholder-empty';
+            hint.textContent = p.has_secrets ? '已配置，留空不修改' : (f.required ? '必填' : '选填');
+            field.appendChild(hint);
+          } else {
+            inp.value = p.config && p.config[f.key] != null ? p.config[f.key] : (f.default || '');
+          }
+          field.appendChild(inp);
+        }
+        fields.appendChild(field);
+      });
+      body.appendChild(fields);
+    }
+
+    card.appendChild(body);
+    grid.appendChild(card);
+  });
+}
+
+function updateBadge(card, enabled) {
+  const badges = card.querySelector('.card-badges');
+  if (!badges) return;
+  const statusBadge = badges.querySelector('.badge');
+  if (statusBadge) {
+    statusBadge.className = 'badge badge-' + (enabled ? 'enabled' : 'disabled');
+    statusBadge.textContent = enabled ? '启用' : '禁用';
+  }
+}
+
+function esc(str) { return String(str).replace(/[&<>"]/g, function(m){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]; }); }
+
+async function save() {
+  const btn = document.getElementById('btn-save');
+  btn.disabled = true;
+  btn.textContent = '保存中...';
+
+  const providers = [];
+  document.querySelectorAll('.card').forEach(card => {
+    const name = card.dataset.name;
+    const enabled = card.querySelector('.toggle-enabled').checked;
+    const priority = parseInt(card.querySelector('.input-priority').value) || 0;
+    const config = {};
+    card.querySelectorAll('.field-config').forEach(field => {
+      const key = field.dataset.key;
+      const type = field.dataset.type;
+      if (type === 'boolean') {
+        config[key] = field.checked;
+      } else if (type === 'number') {
+        config[key] = parseFloat(field.value) || 0;
+      } else {
+        config[key] = field.value;
+      }
+    });
+    providers.push({ name, enabled, priority, config });
+  });
+
+  const whitelist = document.getElementById('whitelist').value.split('\n').map(s => s.trim()).filter(s => s);
+
+  try {
+    const res = await fetch('/admin/api/assets', {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ whitelist, providers })
+    });
+    if (res.ok) {
+      showStatus('保存成功', 'success');
+      load();
+    } else {
+      const err = await res.json().catch(() => ({}));
+      showStatus('保存失败: ' + (err.error || '服务器错误'), 'error');
+    }
+  } catch(e) {
+    showStatus('网络错误', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '保存';
+  }
+}
+
+function showStatus(msg, type) {
+  const el = document.getElementById('save-status');
+  el.textContent = msg;
+  el.className = 'save-status show ' + type;
+  clearTimeout(el._timer);
+  el._timer = setTimeout(function(){ el.className = 'save-status ' + type; }, 3000);
+}
+
+document.addEventListener('DOMContentLoaded', load);
+</script>
+</body>
+</html>

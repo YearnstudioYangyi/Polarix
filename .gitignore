@@ -1,4 +1,8 @@
 config.json
+assets.json
+lib/assets/providers/
+CLAUDE.md
+*_test.go
 *.db
 *.db-shm
 *.db-wal

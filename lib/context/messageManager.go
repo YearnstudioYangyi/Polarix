@@ -37,30 +37,34 @@ func (manager *MessageManager) baseStruct() *message.Message {
 	return msg
 }
 
-// 生成纯文本回复消息
+// Text 生成纯文本回复消息；全局 markdown 开启时自动转 markdown。
 func (manager *MessageManager) Text(content string) *message.TextMessage {
 	metamsg := manager.baseStruct()
 	msg := message.TextMessage{
 		Message: metamsg,
 	}
-	// 填充内容
 	msg.Type = constant.PlainText
 	msg.Content(content)
 	msg.Init()
+	if manager.Qapi != nil && manager.Qapi.GlobalMarkdown {
+		msg.MarkdownMode = true
+	}
 	return &msg
 }
 
-// 生成Markdown回复消息
+// Markdown 生成 Markdown 回复消息。
 func (manager *MessageManager) Markdown(content string) *message.MarkdownMessage {
 	metamsg := manager.baseStruct()
 	msg := message.MarkdownMessage{
 		Message: metamsg,
 	}
 	msg.Init()
-	// 填充内容
 	msg.Type = constant.Markdown
 	msg.Markdown = templates.Markdown{
 		Content: content,
+	}
+	if manager.Qapi != nil {
+		msg.SetAssets(manager.Qapi.Assets)
 	}
 	return &msg
 }
@@ -78,26 +82,22 @@ func (manager *MessageManager) Media(fileInfo string) *message.MediaMessage {
 	return msg
 }
 
-// 填充Markdown模板并构造Markdown消息
+// MarkdownTemplate 填充 Markdown 模板并构造消息。
 func (manager *MessageManager) MarkdownTemplate(id string, args *templates.Args) (*message.MarkdownMessage, error) {
 	var content string
 	var err error
 	if args == nil {
-		// args = &templates.Args{}
 		content, err = templates.FillMarkdownTemplate(id, templates.Args{})
 	} else {
 		content, err = templates.FillMarkdownTemplate(id, *args)
-
 	}
-	// 填充Markdown模板
 	if err != nil {
 		return nil, err
 	}
-	// 构造消息
 	return manager.Markdown(content), nil
 }
 
-// 填充Markdown模板时出错会panic
+// UnsafeMarkdownTemplate 填充失败时 panic。
 func (manager *MessageManager) UnsafeMarkdownTemplate(id string, args *templates.Args) *message.MarkdownMessage {
 	content, err := templates.FillMarkdownTemplate(id, *args)
 	if err != nil {

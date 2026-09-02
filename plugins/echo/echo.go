@@ -79,7 +79,6 @@ func randomImg(context *context.MessageContext) error {
 	btn, _ := k.AppendButton("1", "再来一张", "还要啊", buttons.Blue, 0)
 	btn.SetAutoCommand("/random", true, false).SetUnsupportedTip("不支持按钮捏").SetPermission(buttons.AllUser)
 	msg.Keyboard(k)
-	// context.Text(fmt.Sprintf("![img #%v #%v](%v)\n> 图片源: [loliapi](https://www.loliapi.com/)\n> Origin:\n```\n%v\n```", re.Witdh, re.Height, re.Url, re.Url)).Send()
 	return msg.Send()
 }
 

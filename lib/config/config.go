@@ -16,17 +16,23 @@ type Plugin struct {
 }
 
 type AppConfig struct {
-	Port           uint16                    `json:"port"`
-	AppId          string                    `json:"appid"`
-	AppSecret      string                    `json:"secret"`
-	Plugins        []Plugin                  `json:"plugins"`
-	ProxyAPI       string                    `json:"proxy"`
-	Uin            uint64                    `json:"uin"`
-	Uid            string                    `json:"uid"`
-	Database       string                    `json:"database"`
-	AdminPassword  string                    `json:"admin_password"`
-	PluginSettings map[string]map[string]any `json:"plugin_settings"`
-	PluginAccess   map[string]AccessConfig   `json:"plugin_access"`
+	Port                uint16                    `json:"port"`
+	AppId               string                    `json:"appid"`
+	AppSecret           string                    `json:"secret"`
+	Plugins             []Plugin                  `json:"plugins"`
+	ProxyAPI            string                    `json:"proxy"`
+	Uin                 uint64                    `json:"uin"`
+	Uid                 string                    `json:"uid"`
+	Database            string                    `json:"database"`
+	AdminPassword       string                    `json:"admin_password"`
+	Protocol            string                    `json:"protocol,omitempty"` // webhook | websocket
+	Intents             []string                  `json:"intents,omitempty"`  // websocket 订阅事件
+	GlobalMarkdown      bool                      `json:"global_markdown,omitempty"`
+	MarkdownVerifyImage bool                      `json:"markdown_verify_image,omitempty"`
+	RetryWhen           []int                     `json:"retry_when,omitempty"`
+	UploadThreshold     int                       `json:"upload_threshold,omitempty"` // 分片上传阈值(字节)
+	PluginSettings      map[string]map[string]any `json:"plugin_settings"`
+	PluginAccess        map[string]AccessConfig   `json:"plugin_access"`
 }
 
 type AccessRule struct {
@@ -55,6 +61,19 @@ func InitConfig() AppConfig {
 	}
 	if appConfig.Database == "" {
 		appConfig.Database = "bot.db"
+	}
+	if appConfig.Protocol == "" {
+		appConfig.Protocol = "webhook"
+	}
+	if appConfig.UploadThreshold == 0 {
+		appConfig.UploadThreshold = 3 << 20 // 3MB
+	}
+	if appConfig.Intents == nil {
+		appConfig.Intents = []string{
+			"GROUP_AT_MESSAGE_CREATE", "GROUP_MESSAGE_CREATE", "C2C_MESSAGE_CREATE",
+			"INTERACTION_CREATE", "GROUP_JOIN_REQUEST", "GROUP_MEMBER_ADD", "GROUP_MEMBER_REMOVE",
+			"MESSAGE_AUDIT_PASS", "MESSAGE_AUDIT_REJECT", "GROUP_ADD_ROBOT", "GROUP_DEL_ROBOT",
+		}
 	}
 	return appConfig
 }

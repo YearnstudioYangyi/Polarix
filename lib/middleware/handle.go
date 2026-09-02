@@ -15,9 +15,29 @@ import (
 	"strings"
 )
 
+func enrichInbound(ctx *context.MessageContext, data structers.PrasedData, client *qqapi.Client) {
+	ctx.Mentions = data.Mentions
+	ctx.Quote = structers.ExtractQuote(data.MsgElements)
+	cleanContent, emojis := structers.DecodeEmoji(data.Content)
+	if emojis != nil {
+		ctx.Emojis = emojis
+		ctx.UserMessage.Content = cleanContent
+	}
+	// 附件分类
+	for _, a := range data.Attachments {
+		ctx.AttachmentTypes = append(ctx.AttachmentTypes, structers.ClassifyAttachment(a.ContentType))
+	}
+	// 头像
+	uid := data.Author.MemberOpenID
+	if uid == "" {
+		uid = data.Author.UserOpenID
+	}
+	if uid != "" {
+		ctx.AvatarURL = structers.AvatarURL(client.AppID, uid)
+	}
+}
+
 func ProcessPayload(payload structers.Payload, client *qqapi.Client) {
-	// js, _ := json.MarshalIndent(payload, "", "")
-	// log.Printf("[Debug]Raw request: %v", string(js))
 	switch payload.EventType {
 	case constant.GROUP_AT_MESSAGE_CREATE, constant.GROUP_MESSAGE_CREATE:
 		// payload.Data.Content = strings.TrimSpace(payload.Data.Content)
@@ -30,7 +50,6 @@ func ProcessPayload(payload structers.Payload, client *qqapi.Client) {
 		}
 		cmd, ok := plugin.GetCommand(prefix)
 		if ok {
-			// log.Printf("捕获到%v指令, 来自插件: %v", cmd.Prefix, cmd.PluginId)
 			userID := payload.Data.Author.MemberOpenID
 			if userID == "" {
 				userID = payload.Data.Author.UnionID
@@ -188,6 +207,10 @@ func ProcessPayload(payload structers.Payload, client *qqapi.Client) {
 		if err != nil {
 			// 打印
 		}
+		return
+	case constant.MESSAGE_AUDIT_PASS, constant.MESSAGE_AUDIT_REJECT:
+		// 消息审计结果：resolve 等待中的发送方
+		qqapi.ResolveAudit(payload.Data.AuditID, payload.Data.MessageId, payload.EventType == constant.MESSAGE_AUDIT_PASS)
 		return
 	}
 }

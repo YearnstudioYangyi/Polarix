@@ -23,7 +23,6 @@ func GetImageDimensions(url string) (int, int, error) {
 		return 0, 0, fmt.Errorf("请求失败，状态码: %d", resp.StatusCode)
 	}
 
-	// 使用DecodeConfig读取图片配置
 	config, _, err := image.DecodeConfig(resp.Body)
 	if err != nil {
 		return 0, 0, err

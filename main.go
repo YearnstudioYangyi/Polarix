@@ -2,8 +2,11 @@ package main
 
 import (
 	"Plrx/lib/admin"
+	"Plrx/lib/assets"
+	_ "Plrx/lib/assets/providers"
 	"Plrx/lib/config"
 	"Plrx/lib/constant"
+	"Plrx/lib/gateway"
 	"Plrx/lib/middleware"
 	"Plrx/lib/plugin"
 	"Plrx/lib/qqapi"
@@ -56,10 +59,30 @@ func main() {
 		}
 	}()
 	client := qqapi.Init(appConfig.AppId, appConfig.AppSecret, appConfig.ProxyAPI, requestsClient)
+
+	// 图床聚合器：配置独立存放于 assets.json（不入 git，文件缺失视为未启用）
+	assetsClient := assets.NewClient(30)
+	assetsManager := assets.NewManager(assetsClient)
+	assetsManager.OnReload(client.SetAssets)
+	if err := assetsManager.Load(); err != nil {
+		log.Printf("读取 assets.json 失败，使用空图床配置: %v", err)
+	}
+	if host := assetsManager.Host(); host.Size() > 0 {
+		log.Printf("已启用图床聚合，provider 数量: %d", host.Size())
+	}
+	client.SetMessageOptions(appConfig.GlobalMarkdown, appConfig.MarkdownVerifyImage, appConfig.RetryWhen, appConfig.UploadThreshold)
+
 	plugins_push.SetClient(&client)
 	schedule.Start(&client)
+
+	// 协议分发：webhook 起 HTTP 服务；websocket 起网关长连接
+	if appConfig.Protocol == "websocket" {
+		runGateway(&client, appConfig, assetsManager)
+		return
+	}
+
 	r := gin.Default()
-	admin.Register(r, appConfig.AdminPassword)
+	admin.Register(r, appConfig.AdminPassword, assetsManager)
 
 	// 主动推送接口 (不经过QQ签名校验)
 	r.POST("/push/:scope/:openid", plugins_push.HTTPHandle)
@@ -74,13 +97,8 @@ func main() {
 		if err := c.ShouldBindJSON(&payload); err != nil {
 			return
 		}
-		// rawJson, _ := json.MarshalIndent(payload, "", "  ")
-		// fmt.Printf("[Raw]%v\n\n", string(rawJson))
 		// Op = 13, 签名验证
 		if payload.Op == 13 {
-			// log.Printf("[Webhook] 收到平台网络探测/验证请求")
-
-			// 再次利用相同的 seed 计算私钥用于回包签名
 			seed := appConfig.AppSecret
 			for len(seed) < ed25519.SeedSize {
 				seed = strings.Repeat(seed, 2)
@@ -109,6 +127,25 @@ func main() {
 
 	log.Printf("Server running on %v", appConfig.Port)
 	log.Printf("注册了%v个Markdown模板", templates.GetMarkdownTemplateCount())
+	log.Printf("注册了%v个指令", plugin.GetCommandCount())
+	log.Printf("注册了%v个定时任务", schedule.GetJobCount())
+	r.Run(fmt.Sprintf(":%v", appConfig.Port))
+}
+
+// runGateway WebSocket 模式：起网关长连接 + admin/push HTTP。
+func runGateway(client *qqapi.Client, appConfig config.AppConfig, assetsManager *assets.Manager) {
+	gatewayURL, err := client.GatewayURL()
+	if err != nil {
+		log.Fatalf("获取网关地址失败: %v", err)
+	}
+	intents := gateway.Intents(appConfig.Intents)
+	gw := gateway.New(client, gatewayURL, intents, [2]int{0, 1})
+	go gw.Start()
+
+	r := gin.Default()
+	admin.Register(r, appConfig.AdminPassword, assetsManager)
+	r.POST("/push/:scope/:openid", plugins_push.HTTPHandle)
+	log.Printf("WebSocket 网关已启动（intents=%d），admin 与 push 接口仍在 :%d", intents, appConfig.Port)
 	log.Printf("注册了%v个指令", plugin.GetCommandCount())
 	log.Printf("注册了%v个定时任务", schedule.GetJobCount())
 	r.Run(fmt.Sprintf(":%v", appConfig.Port))

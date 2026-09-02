@@ -1,10 +1,15 @@
 package message
 
-import "encoding/json"
+import (
+	"Plrx/lib/templates"
+	"encoding/json"
+)
 
 type TextMessage struct {
 	*Message
 	TextContent string `json:"content"`
+	// MarkdownMode 全局 markdown 开启时，文本以 markdown 消息类型发送。
+	MarkdownMode bool `json:"-"`
 }
 
 // 设置内容
@@ -15,23 +20,29 @@ func (msg *TextMessage) Content(content string) *TextMessage {
 
 // 实现CanMarshal
 func (msg *TextMessage) Marshal() ([]byte, error) {
+	if msg.MarkdownMode {
+		type mdMsg struct {
+			*Message
+			Markdown templates.Markdown `json:"markdown"`
+		}
+		return json.Marshal(mdMsg{
+			Message:  msg.Message,
+			Markdown: templates.Markdown{Content: ProtectMarkdownAt(msg.TextContent)},
+		})
+	}
 	return json.Marshal(msg)
 }
 
-// 初始化Message结构体
+// Init 初始化 Message 结构体。
 func (msg *TextMessage) Init() {
 	var metamsg *Message
-	// 初始化新的Messgae
 	if msg.Message == nil {
 		metamsg = &Message{}
 		metamsg.InitRef()
 	} else {
-		// 已有, 重用
 		metamsg = msg.Message
 	}
-	// 建立Marshal接口传递
 	metamsg.MarshalInterface = msg
-	// 储存Message指针
 	msg.Message = metamsg
 }
 
