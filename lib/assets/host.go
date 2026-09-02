@@ -180,9 +180,7 @@ func (h *ImageHost) load(src string) (ProviderInput, error) {
 		return ProviderInput{Buffer: raw, Filename: "inline", MimeType: mimeType}, nil
 	}
 
-	if strings.HasPrefix(src, "file://") {
-		src = src[7:]
-	}
+	src = strings.TrimPrefix(src, "file://")
 	data, err := os.ReadFile(src)
 	if err != nil {
 		return ProviderInput{}, fmt.Errorf("read file: %w", err)
