@@ -159,6 +159,15 @@ func draw(ctx *context.MessageContext) error {
 	}
 	defer os.Remove(filePath)
 
+	// 图床 URL 内嵌 markdown。失败降级腾讯内置上传。
+	if host := ctx.Qapi.Assets; host != nil && host.Size() > 0 {
+		if resolved, err := host.ImgToURL(filePath); err == nil {
+			md := ctx.Markdown(fmt.Sprintf("![图片 #%dpx #%dpx](%s)", resolved.Width, resolved.Height, resolved.URL))
+			return md.Send()
+		}
+		// 图床失败，降级腾讯内置
+	}
+
 	fileInfo, err := ctx.Qapi.UploadImage(ctx.Target, ctx.GroupId, ctx.UserId, filePath)
 	if err != nil {
 		_ = ctx.Text("图片上传失败，请稍后重试。").Send()

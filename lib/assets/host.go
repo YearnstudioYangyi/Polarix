@@ -120,7 +120,8 @@ func (h *ImageHost) ImgToURL(src string) (ResolvedImage, error) {
 }
 
 // ProcessMarkdown 处理 markdown 中的图片引用：local/base64 上传图床，替换为
-// ![alt #wpx #hpx](公网URL)。图片解析失败时保持原样。
+// ![alt #wpx #hpx](公网URL)。公网 URL / 白名单命中时原样保留（含已带尺寸标注），
+// 避免二次处理丢失信息；图床上传失败时保持原样。
 func (h *ImageHost) ProcessMarkdown(input string) string {
 	if h == nil || len(h.providers) == 0 {
 		return input
@@ -133,6 +134,10 @@ func (h *ImageHost) ProcessMarkdown(input string) string {
 		alt, src := m[1], m[2]
 		resolved, err := h.ImgToURL(src)
 		if err != nil {
+			return match
+		}
+		// 公网 URL / 白名单直通：URL 未变则原样返回，保留 alt 中已有的尺寸标注
+		if resolved.URL == src {
 			return match
 		}
 		if resolved.Width > 0 && resolved.Height > 0 {
