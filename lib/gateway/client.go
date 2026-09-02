@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math/rand/v2"
 	"net/url"
 	"time"
 
@@ -77,10 +78,12 @@ func (c *Client) Start() {
 		if err := c.run(); err != nil {
 			log.Printf("[gateway] 连接断开: %v，%.0fs 后重连", err, backoff.Seconds())
 		}
+		// jitter 抖动：随机 ±25% 偏移，避免多实例断线后同步重连（thundering herd）
+		jittered := backoff + time.Duration(rand.Int64N(int64(backoff)/2)-int64(backoff)/4)
 		select {
 		case <-c.stop:
 			return
-		case <-time.After(backoff):
+		case <-time.After(jittered):
 		}
 		if backoff < 30*time.Second {
 			backoff *= 2

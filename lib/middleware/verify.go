@@ -12,17 +12,22 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func VerifySignature(botSecret string) gin.HandlerFunc {
-	// 提前计算好公钥，避免每次请求重复计算
-	seed := botSecret
+// DeriveEd25519Key 从 AppSecret 派生 QQ 签名密钥对。
+// QQ 平台无独立公钥分发，官方 SDK 定义以 secret 为种子生成：seed 长度不足时
+// 重复拼接补齐到 32 字节。verify 用公钥验签，webhook Op=13 用私钥回签。
+// 两处共用同一函数避免派生逻辑漂移。
+func DeriveEd25519Key(secret string) (ed25519.PublicKey, ed25519.PrivateKey) {
+	seed := secret
 	for len(seed) < ed25519.SeedSize {
-		seed = strings.Repeat(seed, 2)
+		seed += seed
 	}
-	rand := strings.NewReader(seed[:ed25519.SeedSize])
-	publicKey, _, err := ed25519.GenerateKey(rand)
-	if err != nil {
-		log.Fatalf("初始化公钥失败: %v", err)
-	}
+	reader := strings.NewReader(seed[:ed25519.SeedSize])
+	pub, priv, _ := ed25519.GenerateKey(reader)
+	return pub, priv
+}
+
+func VerifySignature(botSecret string) gin.HandlerFunc {
+	pub, _ := DeriveEd25519Key(botSecret)
 
 	return func(c *gin.Context) {
 		// 主动推送接口不走QQ签名校验
@@ -63,7 +68,7 @@ func VerifySignature(botSecret string) gin.HandlerFunc {
 		msg.Write(bodyBytes)
 
 		// 校验签名
-		if !ed25519.Verify(publicKey, msg.Bytes(), sig) {
+		if !ed25519.Verify(pub, msg.Bytes(), sig) {
 			log.Println("[签名校验失败] 签名验证不通过，可能遭遇伪造请求")
 			c.AbortWithStatus(http.StatusUnauthorized)
 			return

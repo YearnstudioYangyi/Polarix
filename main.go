@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 )
@@ -99,12 +98,7 @@ func main() {
 		}
 		// Op = 13, 签名验证
 		if payload.Op == 13 {
-			seed := appConfig.AppSecret
-			for len(seed) < ed25519.SeedSize {
-				seed = strings.Repeat(seed, 2)
-			}
-			reader := strings.NewReader(seed[:ed25519.SeedSize])
-			_, privateKey, _ := ed25519.GenerateKey(reader)
+			_, privateKey := middleware.DeriveEd25519Key(appConfig.AppSecret)
 
 			var msg bytes.Buffer
 			msg.WriteString(payload.Data.EventTs)
