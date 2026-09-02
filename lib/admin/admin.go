@@ -56,6 +56,10 @@ func Register(router *gin.Engine, password string) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "保存配置失败"})
 			return
 		}
+		if err := plugin.NotifyConfigurationSaved(c.Param("id"), prepared); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
 		if err := plugin.ApplyConfiguration(c.Param("id"), prepared); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return

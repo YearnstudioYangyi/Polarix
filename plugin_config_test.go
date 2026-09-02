@@ -46,6 +46,55 @@ func TestConfiguredPluginsMasksPassword(t *testing.T) {
 	}
 }
 
+func TestPrepareConfigurationSupportsNumericFields(t *testing.T) {
+	id := "test-numeric-config-fields"
+	plugin.Register(&plugin.Plugin{
+		Id: id,
+		Config: []plugin.ConfigField{
+			{Key: "retries", Type: plugin.ConfigFieldTypeInt},
+			{Key: "scale", Type: plugin.ConfigFieldTypeFloat},
+		},
+	})
+
+	prepared, err := plugin.PrepareConfiguration(id, map[string]any{"retries": float64(3), "scale": float64(1.25)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if retries, ok := prepared["retries"].(int); !ok || retries != 3 {
+		t.Fatalf("integer was not normalized: %#v", prepared["retries"])
+	}
+	if scale, ok := prepared["scale"].(float64); !ok || scale != 1.25 {
+		t.Fatalf("float was not normalized: %#v", prepared["scale"])
+	}
+
+	if _, err := plugin.PrepareConfiguration(id, map[string]any{"retries": 1.5, "scale": 1.25}); err == nil {
+		t.Fatal("fractional integer was accepted")
+	}
+}
+
+func TestConfigSavedLifecycle(t *testing.T) {
+	id := "test-config-saved-lifecycle"
+	called := false
+	plugin.Register(&plugin.Plugin{
+		Id: id,
+		ConfigSaved: func(settings map[string]any) {
+			called = true
+			settings["changed"] = true
+		},
+	})
+
+	settings := map[string]any{"enabled": true}
+	if err := plugin.NotifyConfigurationSaved(id, settings); err != nil {
+		t.Fatal(err)
+	}
+	if !called {
+		t.Fatal("configuration saved lifecycle was not called")
+	}
+	if _, changed := settings["changed"]; changed {
+		t.Fatal("configuration saved lifecycle received the original settings map")
+	}
+}
+
 func TestPluginAccessRules(t *testing.T) {
 	id := "test-access-rules"
 	plugin.Register(&plugin.Plugin{

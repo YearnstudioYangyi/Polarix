@@ -73,7 +73,9 @@ plugin.Register(&plugin.Plugin{
 })
 ```
 
-`ValidateConfig` 在写入配置前执行，`ApplyConfig` 在启动加载和面板保存后执行。
+`ValidateConfig` 在写入配置前执行，`ApplyConfig` 在启动加载和面板保存后执行。`ConfigSaved` 会在管理面板成功写入插件配置后触发，且不会在启动加载时触发。
+
+`ConfigField.Type` 支持 `text`、`password`、`boolean`、`int` 与 `float`。其中 `int` 在插件回调中为 Go `int`，`float` 为 `float64`；推荐使用 `plugin.ConfigFieldTypeInt` 等枚举常量声明。
 
 指令还可以声明生命周期钩子：
 

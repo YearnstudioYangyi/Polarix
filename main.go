@@ -4,6 +4,7 @@ import (
 	"Plrx/lib/admin"
 	"Plrx/lib/config"
 	"Plrx/lib/constant"
+	appcontext "Plrx/lib/context"
 	"Plrx/lib/middleware"
 	"Plrx/lib/plugin"
 	"Plrx/lib/qqapi"
@@ -60,6 +61,9 @@ func main() {
 	schedule.Start(&client)
 	r := gin.Default()
 	admin.Register(r, appConfig.AdminPassword)
+	r.Any("/_plugin/:plugin/:token", func(c *gin.Context) {
+		appcontext.ServeTemporaryRoute(c.Writer, c.Request, c.Param("plugin"), c.Param("token"))
+	})
 
 	// 主动推送接口 (不经过QQ签名校验)
 	r.POST("/push/:scope/:openid", plugins_push.HTTPHandle)

@@ -183,10 +183,10 @@ func ProcessPayload(payload structers.Payload, client *qqapi.Client) {
 		ctx := &context.ApplyJoinGroupContext{
 			Answer: answer,
 		}
-		ctx.Init(payload.Data.JoinRequestId, payload.Data.GroupOpenID, payload.Data.Author.UserOpenID, client) // 初始化Context
-		err := plugin.CallGlobalJoinGroupHandle(ctx)                                                           // 增加recovery
+		ctx.Init(payload.Data.JoinRequestId, payload.Data.GroupOpenID, payload.Data.MemberOpenId, client) // 初始化Context
+		err := plugin.CallGlobalJoinGroupHandle(ctx)                                                      // 增加recovery
 		if err != nil {
-			// 打印
+			fmt.Printf("在处理入群请求时出现错误: %v\n\n", err)
 		}
 		return
 	}

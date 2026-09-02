@@ -15,8 +15,11 @@ type ApplyJoinGroupContext struct {
 func (ctx *ApplyJoinGroupContext) Init(requestId, groupId, userId string, client *qqapi.Client) {
 	ctx.Context = &Context{}
 	ctx.Context.Init("", requestId, client)
+	ctx.Context.GroupId = groupId
 	ctx.eventId = requestId
 	ctx.groupId = groupId
+	ctx.Context.SetGroupId(groupId)
+	ctx.Context.SetUserId(userId)
 	ctx.userId = userId
 }
 

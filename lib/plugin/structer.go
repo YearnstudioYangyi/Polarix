@@ -28,20 +28,36 @@ type Command struct {
 }
 
 type Plugin struct {
-	Id             string
-	Name           string
-	Description    string
-	Commands       []*Command
-	Config         []ConfigField
-	ValidateConfig func(map[string]any) error
-	ApplyConfig    func(map[string]any) error
+	Id              string
+	Name            string
+	Description     string
+	Commands        []*Command
+	Config          []ConfigField
+	ValidateConfig  func(map[string]any) error
+	ApplyConfig     func(map[string]any) error
+	JoinGroupHandle func(*context.ApplyJoinGroupContext) error
+	// ConfigSaved is called after this plugin's configuration is successfully
+	// persisted from the administration panel. It is not called while loading
+	// configuration during startup.
+	ConfigSaved func(map[string]any)
 }
 
+// ConfigFieldType describes the value and control used for a plugin setting.
+type ConfigFieldType string
+
+const (
+	ConfigFieldTypeText     ConfigFieldType = "text"
+	ConfigFieldTypePassword ConfigFieldType = "password"
+	ConfigFieldTypeBoolean  ConfigFieldType = "boolean"
+	ConfigFieldTypeInt      ConfigFieldType = "int"
+	ConfigFieldTypeFloat    ConfigFieldType = "float"
+)
+
 type ConfigField struct {
-	Key         string `json:"key"`
-	Label       string `json:"label"`
-	Description string `json:"description,omitempty"`
-	Type        string `json:"type"`
-	Placeholder string `json:"placeholder,omitempty"`
-	Required    bool   `json:"required,omitempty"`
+	Key         string          `json:"key"`
+	Label       string          `json:"label"`
+	Description string          `json:"description,omitempty"`
+	Type        ConfigFieldType `json:"type"`
+	Placeholder string          `json:"placeholder,omitempty"`
+	Required    bool            `json:"required,omitempty"`
 }

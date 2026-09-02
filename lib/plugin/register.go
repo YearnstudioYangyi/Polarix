@@ -6,6 +6,7 @@ import (
 	"Plrx/lib/parser"
 	"Plrx/lib/utils"
 	"fmt"
+	"math"
 	"slices"
 	"sort"
 	"strings"
@@ -49,6 +50,9 @@ func Register(plugin *Plugin) {
 	lock.Lock()
 	defer lock.Unlock()
 	globalPlugins[plugin.Id] = plugin
+	if plugin.JoinGroupHandle != nil {
+		setGlobalJoinGroupHandle(plugin.Id, plugin.JoinGroupHandle)
+	}
 	for k := range plugin.Commands {
 		v := plugin.Commands[k] // 读取指针
 		v.PluginId = plugin.Id
@@ -100,7 +104,10 @@ func LoadConfigurations(settings map[string]map[string]any) error {
 		if len(registered.Config) == 0 {
 			continue
 		}
-		values := cloneSettings(settings[id])
+		values, err := prepareConfiguration(registered, pluginSettings[id], settings[id])
+		if err != nil {
+			return fmt.Errorf("prepare configuration for plugin %s: %w", id, err)
+		}
 		if registered.ValidateConfig != nil {
 			if err := registered.ValidateConfig(values); err != nil {
 				return fmt.Errorf("validate configuration for plugin %s: %w", id, err)
@@ -151,7 +158,7 @@ func ConfiguredPlugins() []ConfiguredPlugin {
 		}
 		values := cloneSettings(pluginSettings[id])
 		for _, field := range registered.Config {
-			if field.Type == "password" {
+			if field.Type == ConfigFieldTypePassword {
 				_, configured := values[field.Key].(string)
 				values[field.Key] = configured && values[field.Key] != ""
 			}
@@ -370,26 +377,51 @@ func PrepareConfiguration(id string, input map[string]any) (map[string]any, erro
 	if !ok || len(registered.Config) == 0 {
 		return nil, fmt.Errorf("plugin %s has no configurable options", id)
 	}
-	current := pluginSettings[id]
+	return prepareConfiguration(registered, pluginSettings[id], input)
+}
+
+func prepareConfiguration(registered *Plugin, current, input map[string]any) (map[string]any, error) {
 	prepared := make(map[string]any, len(registered.Config))
 	for _, field := range registered.Config {
 		value, exists := input[field.Key]
-		if field.Type == "password" && (!exists || value == "") {
+		if field.Type == ConfigFieldTypePassword && (!exists || value == "") {
 			value, exists = current[field.Key]
 		}
 		if !exists {
-			if field.Type == "boolean" {
+			switch field.Type {
+			case ConfigFieldTypeBoolean:
 				value = false
-			} else {
+			case ConfigFieldTypeInt:
+				value = 0
+			case ConfigFieldTypeFloat:
+				value = float64(0)
+			default:
 				value = ""
 			}
 		}
-		if field.Type == "boolean" {
+		switch field.Type {
+		case ConfigFieldTypeBoolean:
 			if _, ok := value.(bool); !ok {
 				return nil, fmt.Errorf("field %s must be a boolean", field.Key)
 			}
-		} else if _, ok := value.(string); !ok {
-			return nil, fmt.Errorf("field %s must be a string", field.Key)
+		case ConfigFieldTypeInt:
+			integer, ok := configInt(value)
+			if !ok {
+				return nil, fmt.Errorf("field %s must be an integer", field.Key)
+			}
+			value = integer
+		case ConfigFieldTypeFloat:
+			decimal, ok := configFloat(value)
+			if !ok {
+				return nil, fmt.Errorf("field %s must be a number", field.Key)
+			}
+			value = decimal
+		case ConfigFieldTypeText, ConfigFieldTypePassword, "":
+			if _, ok := value.(string); !ok {
+				return nil, fmt.Errorf("field %s must be a string", field.Key)
+			}
+		default:
+			return nil, fmt.Errorf("field %s has unsupported type %q", field.Key, field.Type)
 		}
 		prepared[field.Key] = value
 	}
@@ -399,6 +431,80 @@ func PrepareConfiguration(id string, input map[string]any) (map[string]any, erro
 		}
 	}
 	return prepared, nil
+}
+
+func configInt(value any) (int, bool) {
+	switch number := value.(type) {
+	case int:
+		return number, true
+	case int8:
+		return int(number), true
+	case int16:
+		return int(number), true
+	case int32:
+		return int(number), true
+	case int64:
+		if int64(int(number)) == number {
+			return int(number), true
+		}
+	case uint:
+		if uint64(number) <= uint64(^uint(0)>>1) {
+			return int(number), true
+		}
+	case uint8:
+		return int(number), true
+	case uint16:
+		return int(number), true
+	case uint32:
+		if uint64(number) <= uint64(^uint(0)>>1) {
+			return int(number), true
+		}
+	case uint64:
+		if number <= uint64(^uint(0)>>1) {
+			return int(number), true
+		}
+	case float64:
+		if !math.IsNaN(number) && !math.IsInf(number, 0) && math.Trunc(number) == number && number >= -float64(1<<63) && number < float64(1<<63) {
+			integer := int64(number)
+			if int64(int(integer)) == integer {
+				return int(integer), true
+			}
+		}
+	}
+	return 0, false
+}
+
+func configFloat(value any) (float64, bool) {
+	var result float64
+	switch number := value.(type) {
+	case float64:
+		result = number
+	case float32:
+		result = float64(number)
+	case int:
+		result = float64(number)
+	case int8:
+		result = float64(number)
+	case int16:
+		result = float64(number)
+	case int32:
+		result = float64(number)
+	case int64:
+		result = float64(number)
+	case uint:
+		result = float64(number)
+	case uint8:
+		result = float64(number)
+	case uint16:
+		result = float64(number)
+	case uint32:
+		result = float64(number)
+	case uint64:
+		result = float64(number)
+	default:
+		return 0, false
+	}
+	return result, !math.IsNaN(result) && !math.IsInf(result, 0)
 }
 
 func ApplyConfiguration(id string, settings map[string]any) error {
@@ -414,6 +520,22 @@ func ApplyConfiguration(id string, settings map[string]any) error {
 		}
 	}
 	pluginSettings[id] = cloneSettings(settings)
+	return nil
+}
+
+// NotifyConfigurationSaved invokes the configuration-saved lifecycle hook for
+// a plugin. Callers must invoke this only after the configuration has been
+// persisted successfully.
+func NotifyConfigurationSaved(id string, settings map[string]any) error {
+	lock.RLock()
+	registered, ok := globalPlugins[id]
+	lock.RUnlock()
+	if !ok {
+		return fmt.Errorf("plugin %s is not registered", id)
+	}
+	if registered.ConfigSaved != nil {
+		registered.ConfigSaved(cloneSettings(settings))
+	}
 	return nil
 }
 

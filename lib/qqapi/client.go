@@ -15,6 +15,23 @@ type mediaUploadResponse struct {
 	FileInfo string `json:"file_info"`
 }
 
+// MemberMuteOperation describes the change to apply to a group member's mute state.
+type MemberMuteOperation string
+
+const (
+	MemberMuteAdd    MemberMuteOperation = "add"
+	MemberMuteUpdate MemberMuteOperation = "update"
+	MemberMuteDelete MemberMuteOperation = "del"
+)
+
+// memberMuteState is the payload accepted by the group mute API.
+// MuteExpireAt must use RFC3339 format for add and update operations.
+type memberMuteState struct {
+	Operation    MemberMuteOperation `json:"op"`
+	MemberOpenID string              `json:"member_openid"`
+	MuteExpireAt string              `json:"mute_expire_at,omitempty"`
+}
+
 type Client struct {
 	ProxyAPI    string
 	AppID       string
@@ -121,6 +138,36 @@ func (c *Client) SendPrivateMessage(data []byte, userId string) error {
 	return nil
 }
 
+// SetGroupMemberMute changes one member's mute state in a group. For add and
+// update, muteExpireAt must be an RFC3339 timestamp. For del it should be empty.
+func (c *Client) setGroupMemberMute(groupID, memberOpenID string, operation MemberMuteOperation, muteExpireAt string) error {
+	header, err := c.generateHeader()
+	if err != nil {
+		return err
+	}
+
+	return c.Request.Post(
+		fmt.Sprintf("%v/v2/groups/%v/restrict_chat_setting", c.ProxyAPI, groupID),
+		map[string]any{
+			"members": []memberMuteState{{
+				Operation:    operation,
+				MemberOpenID: memberOpenID,
+				MuteExpireAt: muteExpireAt,
+			}},
+		},
+		nil,
+		header,
+	)
+}
+
+func (c *Client) BanGroupMember(groupID, memberOpenID, muteExpireAt string) error {
+	return c.setGroupMemberMute(groupID, memberOpenID, MemberMuteAdd, muteExpireAt)
+}
+
+func (c *Client) UnbanGroupMember(groupID, memberOpenID string) error {
+	return c.setGroupMemberMute(groupID, memberOpenID, MemberMuteDelete, "")
+}
+
 // UploadImage uploads a local image to QQ and returns file_info for a media message.
 func (c *Client) UploadImage(target constant.MessageOrigin, groupID, userID, filePath string) (string, error) {
 	data, err := os.ReadFile(filePath)
@@ -201,6 +248,7 @@ func (c *Client) RejectGroupJoinRequest(requestId, groupId, userId, reason strin
 		Reason: reason,
 		A:      false,
 	}
+	// fmt.Printf("请求地址: %v\n", fmt.Sprintf("%v/v2/groups/%v/approval_join_request/%v", c.ProxyAPI, groupId, userId))
 	return c.Request.Post(fmt.Sprintf("%v/v2/groups/%v/approval_join_request/%v", c.ProxyAPI, groupId, userId), data, nil, header)
 }
 

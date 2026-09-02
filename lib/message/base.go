@@ -63,7 +63,12 @@ func (msg *Message) Send() error {
 	}
 	// 设置消息编号
 	msg.MsgSeq = seq
-
+	if msg.initiativePush {
+		// 清空event_id / msg_id
+		msg.EventId = ""
+		msg.MsgId = ""
+		msg.msgSeq = 0
+	}
 	// 解析消息
 	var data []byte
 	// 如果有传入解析接口
@@ -83,7 +88,7 @@ func (msg *Message) Send() error {
 	if msg.Qapi == nil {
 		panic("QQAPI Clinet空指针异常")
 	}
-
+	// fmt.Printf("[DEBUG]发送消息的请求体: %v, 目的地址: %v", string(data), msg.GroupId)
 	// 匹配消息类型
 	switch msg.Target {
 	case constant.GroupMessage:
