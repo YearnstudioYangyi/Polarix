@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"regexp"
@@ -20,6 +21,9 @@ import (
 )
 
 var imgRe = regexp.MustCompile(`!\[([^\]]*)\]\(([^)]+)\)`)
+
+// dimRe 匹配 markdown 图片 alt 中已有的尺寸标注（#Wpx #Hpx），防重复追加。
+var dimRe = regexp.MustCompile(`#\d+px\s*#\d+px`)
 
 // NewMultipart 便捷构造 multipart 请求体。
 func NewMultipart() *requests.Multipart { return requests.NewMultipart() }
@@ -98,22 +102,22 @@ func (h *ImageHost) Size() int { return len(h.providers) }
 func (h *ImageHost) Stats() int64 { return h.uploaded }
 
 // ImgToURL 把图片 src 转成公网 URL。
-// 白名单命中时原样返回；非白名单图片（本地/公网/base64）全部下载重传图床；
-// 未配置 provider 或加载/上传失败时保持原样，不中断发送。
+// 白名单命中、公网 URL、未配置 provider 时原样返回（对应参考实现语义）；
+// 仅本地文件/内网/base64 上传图床；上传失败时保持原样，不中断发送。
 func (h *ImageHost) ImgToURL(src string) (ResolvedImage, error) {
 	for _, prefix := range h.whitelist {
 		if strings.HasPrefix(src, prefix) {
 			return ResolvedImage{URL: src}, nil
 		}
 	}
-	// 未配置图床：无需下载，直接透传
-	if len(h.providers) == 0 {
+	// 未配置图床或公网 URL：直通
+	if len(h.providers) == 0 || !isLocal(src) {
 		return ResolvedImage{URL: src}, nil
 	}
 
 	input, err := h.load(src)
 	if err != nil {
-		// 加载失败（公网下载超时、本地文件不存在等）→ 保留原样
+		// 加载失败（本地文件不存在等）→ 保留原样
 		return ResolvedImage{URL: src}, nil
 	}
 
@@ -151,11 +155,34 @@ func (h *ImageHost) ProcessMarkdown(input string) string {
 		if resolved.URL == src {
 			return match
 		}
-		if resolved.Width > 0 && resolved.Height > 0 {
+		// alt 已带尺寸标注（#Wpx #Hpx）时不再重复追加
+		if resolved.Width > 0 && resolved.Height > 0 && !dimRe.MatchString(alt) {
 			return fmt.Sprintf("![%s #%dpx #%dpx](%s)", alt, resolved.Width, resolved.Height, resolved.URL)
 		}
 		return fmt.Sprintf("![%s](%s)", alt, resolved.URL)
 	})
+}
+
+// isLocal 判断 src 是否需要上传：本地文件、内网、base64 data URL 为 true；公网 URL 为 false。
+func isLocal(src string) bool {
+	if strings.HasPrefix(src, "data:") || strings.HasPrefix(src, "file://") {
+		return true
+	}
+	if strings.HasPrefix(src, "http://") || strings.HasPrefix(src, "https://") {
+		u, err := url.Parse(src)
+		if err != nil {
+			return true
+		}
+		host := u.Hostname()
+		if host == "localhost" || host == "127.0.0.1" || host == "::1" {
+			return true
+		}
+		if strings.HasPrefix(host, "10.") || strings.HasPrefix(host, "172.") || strings.HasPrefix(host, "192.168.") {
+			return true
+		}
+		return false
+	}
+	return true
 }
 
 // load 加载图片字节为上传输入：data URL 解码 / 本地文件读取 / 公网 URL 下载。
