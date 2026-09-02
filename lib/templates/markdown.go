@@ -144,7 +144,7 @@ func FillMarkdownTemplate(Id string, arg Args) (string, error) {
 func init() {
 	markdownTemplateCount = 0
 	// Markdown模板
-	root := "templates/markdown"
+	root := templateDirectory("markdown")
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		// 处理遍历过程中的错误
 		if err != nil {

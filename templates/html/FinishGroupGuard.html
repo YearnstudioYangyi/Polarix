@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>身份验证成功</title>
+    <style>
+      :root {
+        --primary-color: #1a1a1a;
+        --secondary-color: #666;
+        --success-color: #27ae60;
+        --bg-color: #f5f5f7;
+        --border-color: #e5e5e5;
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          "Helvetica Neue", Arial, sans-serif;
+        background-color: var(--bg-color);
+        color: var(--primary-color);
+        height: 100vh;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      .card {
+        background: #ffffff;
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        padding: 60px 40px;
+        width: 100%;
+        max-width: 440px;
+        text-align: center;
+      }
+
+      .status-icon {
+        width: 64px;
+        height: 64px;
+        margin: 0 auto 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background-color: #f0fdf4;
+        border-radius: 50%;
+      }
+
+      .status-icon svg {
+        width: 32px;
+        height: 32px;
+        stroke: var(--success-color);
+      }
+
+      h1 {
+        font-size: 24px;
+        font-weight: 600;
+        margin-bottom: 12px;
+        letter-spacing: -0.02em;
+      }
+
+      .message {
+        font-size: 15px;
+        color: var(--secondary-color);
+        line-height: 1.5;
+        margin-bottom: 32px;
+      }
+
+      .divider {
+        height: 1px;
+        background-color: var(--border-color);
+        width: 100%;
+        margin-bottom: 24px;
+      }
+
+      .footer {
+        font-size: 13px;
+        color: #999;
+      }
+
+      .brand {
+        color: var(--primary-color);
+        font-weight: 500;
+        text-decoration: none;
+      }
+
+      @media (max-width: 480px) {
+        .card {
+          border: none;
+          background: transparent;
+          padding: 20px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="status-icon">
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke-width="2.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+      </div>
+
+      <h1>验证成功</h1>
+
+      <div class="message">
+        <p>您的身份已确认，现在可以开始使用服务。</p>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="footer">
+        <p>由 <span class="brand">Yearnstudio</span> 提供技术支持</p>
+      </div>
+    </div>
+  </body>
+</html>

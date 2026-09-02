@@ -334,6 +334,23 @@ QQ的Markdown无法自适应图片大小, 必须追加元信息才能正常显�
 
 ***
 
+### HTML模板
+
+在`templates/html`下放置`.html`文件即可注册 HTML 模板；文件名（不含`.html`）即模板 ID。占位符语法与 Markdown 模板相同，例如`{{ name }}`。
+
+通过`lib/templates`的`FillHTMLTemplate(Id string, args Args)`填充变量：
+
+```go
+content, err := templates.FillHTMLTemplate("UserIdCard", templates.Args{
+	"id":     12345,
+	"msg_id": "message-id",
+})
+```
+
+它会在模板不存在、变量缺失或参数类型不受支持时返回错误。填充值会原样写入 HTML；若变量来自不可信输入，请先进行 HTML 转义。
+
+***
+
 ### 按钮
 
 代码位于`lib/structers/buttons/buttons.go`, 示范在`echo`插件的`/uid`指令
