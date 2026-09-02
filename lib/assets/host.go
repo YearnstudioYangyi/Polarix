@@ -6,12 +6,14 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"net/url"
+	"io"
+	"net/http"
 	"os"
 	"path"
 	"regexp"
 	"slices"
 	"strings"
+	"time"
 
 	"Plrx/lib/images"
 	"Plrx/lib/requests"
@@ -37,7 +39,11 @@ type ImageHost struct {
 	providers []ImageProvider
 	whitelist []string
 	uploaded  int64
+	fetch     *http.Client // 公网图片下载客户端
 }
+
+// maxFetchBytes 单张图片下载上限，防超大/恶意响应拖垮内存。
+const maxFetchBytes = 20 << 20
 
 // HostConfig 图床配置，对应独立 assets.json（不入 git）。
 type HostConfig struct {
@@ -56,7 +62,10 @@ type ProviderItem struct {
 // NewHost 从配置创建图床聚合器：过滤未启用的 provider，
 // 按 Priority 降序排列（稳定排序，同级保持配置顺序）。
 func NewHost(cfg HostConfig, cl *Client) *ImageHost {
-	h := &ImageHost{whitelist: cfg.Whitelist}
+	h := &ImageHost{
+		whitelist: cfg.Whitelist,
+		fetch:     &http.Client{Timeout: 15 * time.Second},
+	}
 	enabled := make([]ProviderItem, 0, len(cfg.Providers))
 	for _, item := range cfg.Providers {
 		if item.Enabled != nil && !*item.Enabled {
@@ -79,7 +88,7 @@ func NewHost(cfg HostConfig, cl *Client) *ImageHost {
 
 // newHostWithProviders 测试用：直接注入 provider。
 func newHostWithProviders(providers []ImageProvider, whitelist []string) *ImageHost {
-	return &ImageHost{providers: providers, whitelist: whitelist}
+	return &ImageHost{providers: providers, whitelist: whitelist, fetch: &http.Client{Timeout: 15 * time.Second}}
 }
 
 // Size 已配置的 provider 数量（0 表示未启用图床）。
@@ -89,26 +98,28 @@ func (h *ImageHost) Size() int { return len(h.providers) }
 func (h *ImageHost) Stats() int64 { return h.uploaded }
 
 // ImgToURL 把图片 src 转成公网 URL。
-// 公网 URL 直通；命中白名单原样返回；本地/内网/base64 上传图床。
+// 白名单命中时原样返回；非白名单图片（本地/公网/base64）全部下载重传图床；
+// 未配置 provider 或加载/上传失败时保持原样，不中断发送。
 func (h *ImageHost) ImgToURL(src string) (ResolvedImage, error) {
 	for _, prefix := range h.whitelist {
 		if strings.HasPrefix(src, prefix) {
 			return ResolvedImage{URL: src}, nil
 		}
 	}
-
-	if !isLocal(src) {
+	// 未配置图床：无需下载，直接透传
+	if len(h.providers) == 0 {
 		return ResolvedImage{URL: src}, nil
 	}
 
 	input, err := h.load(src)
 	if err != nil {
-		return ResolvedImage{}, fmt.Errorf("load image: %w", err)
+		// 加载失败（公网下载超时、本地文件不存在等）→ 保留原样
+		return ResolvedImage{URL: src}, nil
 	}
 
 	url, err := h.upload(input)
 	if err != nil {
-		return ResolvedImage{}, err
+		return ResolvedImage{URL: src}, err
 	}
 
 	width, height := 0, 0
@@ -147,29 +158,7 @@ func (h *ImageHost) ProcessMarkdown(input string) string {
 	})
 }
 
-// isLocal 判断 src 是否需要上传：本地文件、内网、base64 data URL 为 true；公网 URL 为 false。
-func isLocal(src string) bool {
-	if strings.HasPrefix(src, "data:") || strings.HasPrefix(src, "file://") {
-		return true
-	}
-	if strings.HasPrefix(src, "http://") || strings.HasPrefix(src, "https://") {
-		u, err := url.Parse(src)
-		if err != nil {
-			return true
-		}
-		host := u.Hostname()
-		if host == "localhost" || host == "127.0.0.1" || host == "::1" {
-			return true
-		}
-		if strings.HasPrefix(host, "10.") || strings.HasPrefix(host, "172.") || strings.HasPrefix(host, "192.168.") {
-			return true
-		}
-		return false
-	}
-	return true
-}
-
-// load 加载本地/内网/base64 资源为上传输入。
+// load 加载图片字节为上传输入：data URL 解码 / 本地文件读取 / 公网 URL 下载。
 func (h *ImageHost) load(src string) (ProviderInput, error) {
 	if strings.HasPrefix(src, "data:") {
 		comma := strings.IndexByte(src, ',')
@@ -185,12 +174,43 @@ func (h *ImageHost) load(src string) (ProviderInput, error) {
 		return ProviderInput{Buffer: raw, Filename: "inline", MimeType: mimeType}, nil
 	}
 
+	if strings.HasPrefix(src, "http://") || strings.HasPrefix(src, "https://") {
+		return h.fetchRemote(src)
+	}
+
 	src = strings.TrimPrefix(src, "file://")
 	data, err := os.ReadFile(src)
 	if err != nil {
 		return ProviderInput{}, fmt.Errorf("read file: %w", err)
 	}
 	return ProviderInput{Buffer: data, Filename: path.Base(src)}, nil
+}
+
+// fetchRemote 下载公网图片为上传输入，限制响应体大小防拖垮内存。
+func (h *ImageHost) fetchRemote(src string) (ProviderInput, error) {
+	resp, err := h.fetch.Get(src)
+	if err != nil {
+		return ProviderInput{}, fmt.Errorf("download image: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return ProviderInput{}, fmt.Errorf("download image: status %d", resp.StatusCode)
+	}
+
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxFetchBytes+1))
+	if err != nil {
+		return ProviderInput{}, fmt.Errorf("read image body: %w", err)
+	}
+	if len(data) > maxFetchBytes {
+		return ProviderInput{}, fmt.Errorf("image exceeds %d bytes", maxFetchBytes)
+	}
+
+	return ProviderInput{
+		Buffer:   data,
+		Filename: path.Base(src),
+		MimeType: resp.Header.Get("Content-Type"),
+	}, nil
 }
 
 // upload 按优先级依次尝试 provider，收集错误，全失败时汇总抛出。

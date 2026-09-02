@@ -21,13 +21,18 @@ func (msg *TextMessage) Content(content string) *TextMessage {
 // 实现CanMarshal
 func (msg *TextMessage) Marshal() ([]byte, error) {
 	if msg.MarkdownMode {
+		content := ProtectMarkdownAt(msg.TextContent)
+		// globalMarkdown 模式下文本中的图片同样过图床（与 MarkdownMessage 一致）
+		if msg.Qapi != nil && msg.Qapi.Assets != nil {
+			content = msg.Qapi.Assets.ProcessMarkdown(content)
+		}
 		type mdMsg struct {
 			*Message
 			Markdown templates.Markdown `json:"markdown"`
 		}
 		return json.Marshal(mdMsg{
 			Message:  msg.Message,
-			Markdown: templates.Markdown{Content: ProtectMarkdownAt(msg.TextContent)},
+			Markdown: templates.Markdown{Content: content},
 		})
 	}
 	return json.Marshal(msg)
