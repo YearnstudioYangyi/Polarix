@@ -36,27 +36,12 @@ func init() {
 	plugin.Register(self)
 }
 
-func handle(ctx *context.ScheduleContext) error {
-	// 获取所有监测域名
-	err := ctx.Request.Get("https://api.yearnstudio.cn/", nil, nil)
-	if err == nil {
-		return ctx.Markdown("## 定时Uptime检测结果\n🟩正常").Send()
-	} else {
-		return ctx.Markdown(fmt.Sprintf("## 定时Uptime检测结果\n🟥异常\n\n> %v", err)).Send()
-	}
-}
-
 func helpText(ctx *context.MessageContext) error {
 	md, err := ctx.MarkdownTemplate("UptimeHelp", &templates.Args{})
 	if err != nil {
 		return err
 	}
 	return md.Send()
-}
-
-func addSite(ctx *context.MessageContext) error {
-	fmt.Printf("执行了helpText, content = ")
-	return nil
 }
 
 func openAIStatus(ctx *context.MessageContext) error {
