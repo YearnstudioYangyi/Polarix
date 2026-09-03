@@ -124,14 +124,9 @@ func ProcessPayload(payload structers.Payload, client *qqapi.Client) {
 	case constant.INTERACTION_CREATE:
 		data := payload.Data.Callback.Resolved.ButtonData
 		buttonId := payload.Data.Callback.Resolved.ButtonId
-		callbackFunc, ok := buttons.GetCallbackFunc(buttonId)
-		if !ok {
-			log.Printf("回调按钮: %v未注册回调函数, 跳过处理", buttonId)
-			return
-		}
-		// 找到了回调函数
 		ctx := &context.CallbackContext{}
 		ctx.Init(payload.ID, client)
+		ctx.InteractionID = payload.Data.Id
 		ctx.ButtonId = buttonId
 		ctx.Data = data
 		ctx.SetGroupId(payload.Data.GroupOpenID)
@@ -143,6 +138,15 @@ func ProcessPayload(payload structers.Payload, client *qqapi.Client) {
 			userID = payload.Data.Author.UnionID
 		}
 		ctx.SetUserId(userID)
+		// 无论按钮是否已注册，事件到达就先把交互回执掉，避免按钮转圈到超时。
+		if err := ctx.Done(); err != nil {
+			log.Printf("回执按钮 %v 失败: %v", buttonId, err)
+		}
+		callbackFunc, ok := buttons.GetCallbackFunc(buttonId)
+		if !ok {
+			log.Printf("回调按钮: %v未注册回调函数, 已回执交互", buttonId)
+			return
+		}
 		go callbackHandleFunc(callbackFunc, ctx)
 	case constant.GROUP_JOIN_REQUEST:
 		var answer string
@@ -220,9 +224,7 @@ func callbackHandleFunc(handle buttons.CallbackButtonHandleFunc, ctx *context.Ca
 			log.Printf("在执行回调按钮: %v 处理函数时候出现panic: %v", ctx.ButtonId, r)
 		}
 	}()
-	if err := ctx.Done(); err != nil {
-		log.Printf("在处理回调按钮上报: %v 时候出现error: %v", ctx.ButtonId, err)
-	}
+	// 交互回执已在事件分发时完成，这里只跑业务，避免重复回执。
 	if err := handle(ctx); err != nil {
 		log.Printf("在执行回调按钮: %v 处理函数时候出现error: %v", ctx.ButtonId, err)
 	}

@@ -290,13 +290,14 @@ func (c *Client) UploadMedia(target constant.MessageOrigin, groupID, userID stri
 	return result.FileInfo, nil
 }
 
-// 回复回调按钮
+// InteracteCallback 回执按钮交互，终止 QQ 端按钮 loading。
+// code=0 表示正常处理完成；QQ 要求 3 秒内回执，超时按钮会判定失败。
 func (c *Client) InteracteCallback(eventId string) error {
 	header, err := c.generateHeader()
 	if err != nil {
 		return err
 	}
-	return c.Request.Put(fmt.Sprintf("%v/interactions/%v", c.ProxyAPI, eventId), nil, nil, header)
+	return c.Request.Put(fmt.Sprintf("%v/interactions/%v", c.ProxyAPI, eventId), map[string]int{"code": 0}, nil, header)
 }
 
 // 同意入群请求
