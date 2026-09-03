@@ -25,20 +25,6 @@
   "markdown_verify_image": false,
   "retry_when": [11253, 630006],
   "upload_threshold": 3145728,
-  "assets": {
-    "whitelist": ["https://q.qlogo.cn"],
-    "providers": [
-      {
-        "name": "example",
-        "enabled": true,
-        "priority": 100,
-        "config": {
-          "token": "你的图床 Token",
-          "endpoint": "https://example.com/upload"
-        }
-      }
-    ]
-  },
   "plugin_settings": {
     "imagegen": {
       "base_url": "https://api.openai.com/v1",
