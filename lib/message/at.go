@@ -1,6 +1,33 @@
 package message
 
-import "strings"
+import (
+	"encoding/json"
+	"strings"
+)
+
+// AtMessage 艾特部件：All 为 true 时艾特所有人。
+type AtMessage struct {
+	*Message
+	OpenID string `json:"-"`
+	All    bool   `json:"-"`
+}
+
+func (*AtMessage) part() {}
+
+func (msg *AtMessage) Marshal() ([]byte, error) {
+	content := "@everyone"
+	if !msg.All {
+		content = "<@" + msg.OpenID + ">"
+	}
+	type txt struct {
+		*Message
+		Content string `json:"content"`
+	}
+	return json.Marshal(txt{
+		Message: msg.Message,
+		Content: content,
+	})
+}
 
 // ProtectMarkdownAt 在 markdown 中对裸 @ 加零宽空格 \u200b，防止被 QQ 误解析为艾特。
 // 排除 a@b（邮箱/链接）、<@openid>（已生成的 at 元素）与 @ 后无内容的场景。
