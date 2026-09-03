@@ -8,7 +8,7 @@ import (
 	"sync"
 )
 
-// MsgBuilder 消息聚合器：Add 实体部件，Send 时分拣合并发送。
+// MsgBuilder 消息链：链式拼实体部件，Send 时分拣合并发送。
 type MsgBuilder struct {
 	m     *MessageManager
 	parts []message.Part
@@ -16,7 +16,8 @@ type MsgBuilder struct {
 	quote string
 }
 
-// Msg 开启一条消息聚合。
+// Msg 开启一条消息链。既支持便捷链式（Text/Image/At...），
+// 也支持 Add(实体) 追加，最终 Send 统一分拣。
 func (manager *MessageManager) Msg() *MsgBuilder {
 	return &MsgBuilder{m: manager}
 }
@@ -25,6 +26,39 @@ func (manager *MessageManager) Msg() *MsgBuilder {
 func (b *MsgBuilder) Add(parts ...message.Part) *MsgBuilder {
 	b.parts = append(b.parts, parts...)
 	return b
+}
+
+func (b *MsgBuilder) Text(s string) *MsgBuilder {
+	return b.Add(b.m.Text(s))
+}
+
+func (b *MsgBuilder) At(openid string) *MsgBuilder {
+	return b.Add(b.m.At(openid))
+}
+
+func (b *MsgBuilder) AtAll() *MsgBuilder {
+	return b.Add(b.m.AtAll())
+}
+
+func (b *MsgBuilder) Markdown(s string) *MsgBuilder {
+	return b.Add(b.m.Markdown(s))
+}
+
+// Image 追加图片；src 支持 string(路径/data/base64/公网URL) 与 []byte。
+func (b *MsgBuilder) Image(src any, summary string) *MsgBuilder {
+	return b.Add(b.m.Image(src, summary))
+}
+
+func (b *MsgBuilder) Voice(src any) *MsgBuilder {
+	return b.Add(b.m.Voice(src))
+}
+
+func (b *MsgBuilder) Video(src any) *MsgBuilder {
+	return b.Add(b.m.Video(src))
+}
+
+func (b *MsgBuilder) File(src any, name string) *MsgBuilder {
+	return b.Add(b.m.File(src, name))
 }
 
 // Keyboard 挂按钮板，仅随 markdown 消息发送。

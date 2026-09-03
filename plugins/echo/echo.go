@@ -85,8 +85,8 @@ func randomImg(context *context.MessageContext) error {
 	btn, _ := k.AppendButton("1", "再来一张", "还要啊", buttons.Blue, 0)
 	btn.SetAutoCommand("/random", true, false).SetUnsupportedTip("不支持按钮捏").SetPermission(buttons.AllUser)
 	return context.Msg().
-		Add(context.Image(re.Url, "img")).
-		Add(context.Markdown(fmt.Sprintf("> 图片源: [loliapi](https://www.loliapi.com/)\n> 图片直链:\n```\n%v\n```", re.Url))).
+		Image(re.Url, "img").
+		Markdown(fmt.Sprintf("> 图片源: [loliapi](https://www.loliapi.com/)\n> 图片直链:\n```\n%v\n```", re.Url)).
 		Keyboard(k).
 		Send()
 }
@@ -107,7 +107,7 @@ func getGid(context *context.MessageContext) error {
 	return md.Send()
 }
 
-// showcase 演示消息聚合：实体构造 + Add 插入 + 按钮。
+// showcase 演示消息聚合：混合链式便捷调用与 Add(实体)。
 func showcase(ctx *context.MessageContext) error {
 	var re struct {
 		Url    string `json:"url"`
@@ -121,10 +121,10 @@ func showcase(ctx *context.MessageContext) error {
 	btn, _ := k.AppendButton("1", "再来一张", "还要啊", buttons.Blue, 0)
 	btn.SetAutoCommand("/random", true, false).SetUnsupportedTip("不支持按钮捏").SetPermission(buttons.AllUser)
 	return ctx.Msg().
-		Add(ctx.At(ctx.UserId)).
-		Add(ctx.Text(" 看这个")).
+		At(ctx.UserId).
+		Text(" 看这个").
 		Add(ctx.Image(re.Url, "随机图")).
-		Add(ctx.Markdown(fmt.Sprintf("> 图片源: [loliapi](https://www.loliapi.com/)\n```\n%v\n```", re.Url))).
+		Markdown(fmt.Sprintf("> 图片源: [loliapi](https://www.loliapi.com/)\n```\n%v\n```", re.Url)).
 		Keyboard(k).
 		Send()
 }
