@@ -5,7 +5,9 @@
 > Without AI feature
 
 ### 配置文件
+
 在根目录下新建`config.json`, 并按照下方格式填写
+
 ```json
 {
   "port": 8080,
@@ -23,23 +25,26 @@
 (这两个参数可以不填写, 并非必须参数)
 
 #### 配置文件说明
-- port    服务端口
-- appid   机器人ID
-- secret  机器人AppSecret
-- proxy   代理地址
+
+- port 服务端口
+- appid 机器人ID
+- secret 机器人AppSecret
+- proxy 代理地址
 
 > 什么是代理地址?
-> 
+>
 > 代理地址是为了QQ开放平台IP白名单限制所使用的功能, 当你的服务器处于动态IP的时候, 可以在一个固定IP的设备上搭建反代服务, 然后填写对应的地址
 
 ### WebHook配置
+
 在QQ开放平台里配置, WebHook填写`你的地址:端口/webhook`
 
 事件按照你的需求勾选, 也可以一次性全部选择
 
-***
+---
 
 ### 组织方式
+
 框架使用`插件`的形式来增加功能
 
 ### 插件管理面板
@@ -104,9 +109,11 @@ plugin.Register(&plugin.Plugin{
 访问控制保存在 `config.json` 的 `plugin_access` 字段。群聊优先使用发送者的 `member_openid`，缺失时使用 `union_openid`；私聊使用 `user_openid`。被拒绝的指令会静默忽略。
 
 #### 新建插件
+
 在`plugins`(注意不是`lib/plugin`)目录下新建一个文件夹, 然后放入你的插件代码
 
 如下是一个插件模板
+
 ```go
 package echo
 
@@ -140,36 +147,41 @@ func echoHandle(ctx *context.Context) error {
 
 #### 插件元信息
 
-- Id          插件ID, 用于日志排查
-- Commands    指令列表, 用于注册指令
+- Id 插件ID, 用于日志排查
+- Commands 指令列表, 用于注册指令
 
 #### 新建指令
+
 一个指令需要`前缀` / `使用权限` / `描述`(暂无功能) / `处理函数`
 
 并且可以额外添加`解析器`及`解析模板`
 
 ##### 前缀
+
 > Prefix
-指令前缀, 只有以该前缀开头的指令会传入插件
+> 指令前缀, 只有以该前缀开头的指令会传入插件
 
 根据注册顺序, 后注册的插件如果跟之前注册插件的前缀相同, 会发生**覆盖**
 
 ##### 使用权限
+
 > Role | 枚举值: **constant.RoleMember** | **constant.RoleAdmin** | **constant.RoleOwner**
-最低使用指令的成员身份, 依次为**普通成员**、**管理员**和**群主**
+> 最低使用指令的成员身份, 依次为**普通成员**、**管理员**和**群主**
 
 不满足身份要求会静默失败
 
 ##### 处理函数
-> Handle | type HandleFunc func(*context.Context) error
+
+> Handle | type HandleFunc func(\*context.Context) error
 
 其中`*context.Context`为上下文对象, 其API用法见后文
 
 函数需要返回一个`error`, 会显示在日志里, 不会发送到QQ里
 
 ##### 解析器&解析模板
+
 > Parser & ParserTarget
-> 
+>
 > 两者必须合用, 否则可能引发panic或预期之外的行为
 
 解析器接受一个`Parser`接口, 其需要一个`Parse(rawMsg string, result any) error`函数, 该函数接收**原始消息**及**接收者指针**并返回一个`error`
@@ -184,7 +196,6 @@ func echoHandle(ctx *context.Context) error {
 
 当解析器为`PositionalParser`, 必须指定`ParserTarget`为一个从**结构体**构造的`reflect.Type`对象(`reflect.TypeOf`), 可以参考**ping**插件
 
-
 #### 注册插件
 
 在`plugins/register.go`中**匿名导入**你的插件所在的包
@@ -194,13 +205,14 @@ import	_ "Plrx/plugins/ping"
 
 ```
 
-***
+---
 
 ### 上下文对象
 
 这里假设传入的Context被`ctx`变量接收
 
 #### 发送消息
+
 有两种方式, 一种是手动构造`Message`对象, 而更推荐的是调用`Reply`快捷函数
 
 ##### Reply函数
@@ -218,6 +230,7 @@ ctx.Reply("", structers.PlainText)
 **消息内容**在消息类型为`Markdown`的时候, 会被渲染为Markdown
 
 ##### Message对象
+
 > 该对象的定义位于**lib/structers/msg.go**
 
 1. 构造Message对象
@@ -283,13 +296,14 @@ ctx.Reply("", structers.PlainText)
 - body 请求体(可以为`[]byte`或者为可以被`json.Marshal`的对象)
 - result/headers 同上
 
-***
+---
 
 ### Markdown模板
 
 可以在`templates/markdown`下面存放多个`.md`文件, 每个文件为一个Markdown模板, 非`.md`文件会被忽略
 
 在Markdown模板里, 可以使用插值语法":
+
 ```markdown
 ## {{ aaa }}
 ```
@@ -306,12 +320,14 @@ ctx.Reply("", structers.PlainText)
 #### 参数列表
 
 是由`type Args map[string]any`定义的, 可以通过类似于:
+
 ```go
 templates.Args{
 	"name":        data.Data.Name,
 	"look":        data.Data.Look,
 }
 ```
+
 的方式直接声明, 原本的`map[string]string`不再使用
 
 参数既可以是`string`也可以是`int, int64, float64`
@@ -327,12 +343,14 @@ templates.Args{
 #### 追加图片元信息
 
 QQ的Markdown无法自适应图片大小, 必须追加元信息才能正常显示:
+
 ```markdown
 ![alt #300px #400px](https://aaa.com/bbb.jpg)
 ```
+
 可以调用`ProcessMarkdownImages`辅助函数, 该函数会自动处理所有图片引用并追加元信息
 
-***
+---
 
 ### HTML模板
 
@@ -349,7 +367,7 @@ content, err := templates.FillHTMLTemplate("UserIdCard", templates.Args{
 
 它会在模板不存在、变量缺失或参数类型不受支持时返回错误。填充值会原样写入 HTML；若变量来自不可信输入，请先进行 HTML 转义。
 
-***
+---
 
 ### 按钮
 
@@ -396,15 +414,16 @@ button, err := keyboard.AppendButton("ID", "点击前文本", "点击后文本",
 
 调用`button.SetUnsupportedTip`设置不支持按钮的时候的提示文本
 
-***
+---
 
 ### TODO
 
 - [x] 支持按钮功能
-- [ ] 数据库API
-- [ ] 按钮回调事件
+- [x] 数据库API
+- [x] 按钮回调事件
 
 #### 不会支持的功能
+
 - 所有与频道相关的功能
 
 ## 许可证
