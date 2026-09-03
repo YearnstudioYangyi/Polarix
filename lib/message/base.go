@@ -15,6 +15,7 @@ type Message struct {
 	MsgSeq           uint8                  `json:"msg_seq,omitempty"`
 	EventId          string                 `json:"event_id,omitempty"`
 	Type             constant.MessageType   `json:"msg_type"`
+	Reference        *MessageReference      `json:"message_reference,omitempty"`
 	Qapi             *qqapi.Client          `json:"-"`
 	GroupId          string                 `json:"-"`
 	UserId           string                 `json:"-"`
@@ -22,6 +23,16 @@ type Message struct {
 	used             bool                   `json:"-"` // 是否被使用过
 	MarshalInterface contract.CanMarshal    `json:"-"`
 	initiativePush   bool                   `json:"-"` // 是否为主动推送
+}
+
+// MessageReference 引用回复：message_id 为被引用的原消息 ID。
+type MessageReference struct {
+	MessageID string `json:"message_id"`
+}
+
+// QuoteTo 让本条消息引用原消息。
+func (msg *Message) QuoteTo(messageID string) {
+	msg.Reference = &MessageReference{MessageID: messageID}
 }
 
 // 初始化回复计数器

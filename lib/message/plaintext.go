@@ -38,6 +38,8 @@ func (msg *TextMessage) Marshal() ([]byte, error) {
 	return json.Marshal(msg)
 }
 
+func (*TextMessage) part() {}
+
 // Init 初始化 Message 结构体。
 func (msg *TextMessage) Init() {
 	var metamsg *Message

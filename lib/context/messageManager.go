@@ -5,10 +5,6 @@ import (
 	"Plrx/lib/message"
 	"Plrx/lib/qqapi"
 	"Plrx/lib/templates"
-	"fmt"
-	"os"
-	"path"
-	"strings"
 )
 
 // Sender 可发送的消息对象（Text/Markdown/Media 均实现）。
@@ -78,7 +74,7 @@ func (manager *MessageManager) Markdown(content string) *message.MarkdownMessage
 	return &msg
 }
 
-// Media creates a rich-media message from file_info returned by QQ's upload API.
+// Media 构造已上传媒体消息（file_info 来自 QQ 上传接口）。
 func (manager *MessageManager) Media(fileInfo string) *message.MediaMessage {
 	msg := &message.MediaMessage{
 		Message: manager.baseStruct(),
@@ -91,45 +87,60 @@ func (manager *MessageManager) Media(fileInfo string) *message.MediaMessage {
 	return msg
 }
 
-// Image 生成图片消息（框架层统一处理，插件只插图片）。
-// 图片一律先经图床转公网 URL（白名单除外）；图床未配置或全失败时降级：
-// 公网 URL 直接交 QQ 媒体上传，本地文件读字节后上传。
-//
-// global_markdown 开启时图片内嵌 markdown（![alt #wpx #hpx](图床URL)），
-// 对应参考适配器的 markdown 上下文路径。否则以媒体消息发送，对应非 markdown 路径。
-func (manager *MessageManager) Image(src string) (Sender, error) {
-	url, width, height := src, 0, 0
-	if host := manager.Qapi.Assets; host != nil && host.Size() > 0 {
-		if resolved, err := host.ImgToURL(src); err == nil {
-			url, width, height = resolved.URL, resolved.Width, resolved.Height
-		}
+// At 构造艾特部件。
+func (manager *MessageManager) At(openid string) *message.AtMessage {
+	msg := &message.AtMessage{
+		Message: manager.baseStruct(),
+		OpenID:  openid,
 	}
+	msg.Type = constant.PlainText
+	return msg
+}
 
-	if manager.Qapi != nil && manager.Qapi.GlobalMarkdown {
-		md := "![图片"
-		if width > 0 && height > 0 {
-			md += fmt.Sprintf(" #%dpx #%dpx", width, height)
-		}
-		md += fmt.Sprintf("](%s)", url)
-		return manager.Markdown(md), nil
+// AtAll 构造 @所有人 部件。
+func (manager *MessageManager) AtAll() *message.AtMessage {
+	msg := &message.AtMessage{
+		Message: manager.baseStruct(),
+		All:     true,
 	}
+	msg.Type = constant.PlainText
+	return msg
+}
 
-	up := qqapi.MediaUpload{FileType: 1}
-	if strings.HasPrefix(url, "http://") || strings.HasPrefix(url, "https://") {
-		up.URL = url
-	} else {
-		data, err := os.ReadFile(strings.TrimPrefix(url, "file://"))
-		if err != nil {
-			return nil, err
-		}
-		up.Data = data
-		up.Filename = path.Base(url)
+// Image 构造图片部件；src 支持 string(路径/data/base64/公网URL) 与 []byte。
+// 发送形态（markdown 内嵌 / 独立媒体）由 Send 时按上下文决策。
+func (manager *MessageManager) Image(src any, summary string) *message.ImageMessage {
+	msg := &message.ImageMessage{
+		Message: manager.baseStruct(),
+		Src:     src,
+		Summary: summary,
 	}
-	fileInfo, err := manager.Qapi.UploadMedia(manager.Target, manager.GroupId, manager.UserId, up)
-	if err != nil {
-		return nil, err
+	return msg
+}
+
+// Voice 构造语音部件；src 支持路径/URL/data/base64/[]byte。
+func (manager *MessageManager) Voice(src any) *message.UploadMessage {
+	return manager.upload(constant.MediaVoice, src, "voice")
+}
+
+// Video 构造视频部件。
+func (manager *MessageManager) Video(src any) *message.UploadMessage {
+	return manager.upload(constant.MediaVideo, src, "video")
+}
+
+// File 构造文件部件。
+func (manager *MessageManager) File(src any, name string) *message.UploadMessage {
+	return manager.upload(constant.MediaFile, src, name)
+}
+
+func (manager *MessageManager) upload(fileType int, src any, name string) *message.UploadMessage {
+	msg := &message.UploadMessage{
+		Message:  manager.baseStruct(),
+		FileType: fileType,
+		Src:      src,
+		Name:     name,
 	}
-	return manager.Media(fileInfo), nil
+	return msg
 }
 
 // MarkdownTemplate 填充 Markdown 模板并构造消息。

@@ -2,9 +2,10 @@ package assets
 
 import "context"
 
-// ProviderInput 上传输入：已就绪的图片字节流。
+// ProviderInput 上传输入：图片字节流或公网 URL（二选一）。
 type ProviderInput struct {
 	Buffer   []byte
+	URL      string
 	Filename string
 	MimeType string
 }

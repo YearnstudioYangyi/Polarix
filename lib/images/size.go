@@ -5,6 +5,26 @@ import "encoding/binary"
 // Size 图片宽高，均为零表示未探测到。
 type Size struct{ Width, Height int }
 
+// IsImage 魔数嗅探字节是否为常见图片格式（PNG/JPEG/GIF/WebP）。
+func IsImage(buf []byte) bool {
+	if len(buf) < 12 {
+		return false
+	}
+	switch {
+	case buf[0] == 0x89 && buf[1] == 'P' && buf[2] == 'N' && buf[3] == 'G':
+		return true
+	case buf[0] == 0xFF && buf[1] == 0xD8:
+		return true
+	case buf[0] == 'G' && buf[1] == 'I' && buf[2] == 'F' && buf[3] == '8':
+		return true
+	case buf[0] == 'R' && buf[1] == 'I' && buf[2] == 'F' && buf[3] == 'F' && buf[8] == 'W' && buf[9] == 'E' && buf[10] == 'B' && buf[11] == 'P':
+		return true
+	case buf[0] == 'B' && buf[1] == 'M':
+		return true
+	}
+	return false
+}
+
 // probe 从字节切片头部探测图片尺寸，O(1) 内存，不依赖解码库。
 // 支持 PNG / JPEG / GIF / WebP，覆盖 QQ 消息常见图片格式。
 func Probe(buf []byte) *Size {

@@ -3,13 +3,11 @@ package assets
 import (
 	"cmp"
 	"context"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"path"
 	"regexp"
 	"slices"
@@ -101,8 +99,28 @@ func (h *ImageHost) Size() int { return len(h.providers) }
 // Stats 返回本次进程累计上传数。
 func (h *ImageHost) Stats() int64 { return h.uploaded }
 
+// Resolve 任意图片输入转公网 URL（[]byte/路径/data/base64），公网 URL 直通。
+func (h *ImageHost) Resolve(src any) (ResolvedImage, error) {
+	if s, ok := src.(string); ok {
+		return h.ImgToURL(s)
+	}
+	in, err := DecodeImage(src)
+	if err != nil {
+		return ResolvedImage{}, err
+	}
+	url, err := h.upload(ProviderInput{Buffer: in.Data, Filename: in.Filename, MimeType: in.MimeType})
+	if err != nil {
+		return ResolvedImage{}, err
+	}
+	width, height := 0, 0
+	if sz := images.Probe(in.Data); sz != nil {
+		width, height = sz.Width, sz.Height
+	}
+	return ResolvedImage{URL: url, Width: width, Height: height}, nil
+}
+
 // ImgToURL 把图片 src 转成公网 URL。
-// 白名单命中、公网 URL、未配置 provider 时原样返回（对应参考实现语义）；
+// 白名单命中、公网 URL、未配置 provider 时原样返回；
 // 仅本地文件/内网/base64 上传图床；上传失败时保持原样，不中断发送。
 func (h *ImageHost) ImgToURL(src string) (ResolvedImage, error) {
 	for _, prefix := range h.whitelist {
@@ -185,32 +203,21 @@ func isLocal(src string) bool {
 	return true
 }
 
-// load 加载图片字节为上传输入：data URL 解码 / 本地文件读取 / 公网 URL 下载。
+// load 加载图片字节为上传输入：复用 DecodeImage 智能解码（data URL / 裸 base64 / 本地文件 / 公网下载）。
 func (h *ImageHost) load(src string) (ProviderInput, error) {
-	if strings.HasPrefix(src, "data:") {
-		comma := strings.IndexByte(src, ',')
-		if comma < 0 || comma >= len(src)-1 {
-			return ProviderInput{}, fmt.Errorf("invalid data URL")
-		}
-		mimePart := src[5:comma]
-		raw, err := base64.StdEncoding.DecodeString(src[comma+1:])
-		if err != nil {
-			return ProviderInput{}, fmt.Errorf("base64 decode: %w", err)
-		}
-		mimeType := strings.SplitN(mimePart, ";", 2)[0]
-		return ProviderInput{Buffer: raw, Filename: "inline", MimeType: mimeType}, nil
-	}
-
-	if strings.HasPrefix(src, "http://") || strings.HasPrefix(src, "https://") {
-		return h.fetchRemote(src)
-	}
-
-	src = strings.TrimPrefix(src, "file://")
-	data, err := os.ReadFile(src)
+	in, err := DecodeImage(src)
 	if err != nil {
-		return ProviderInput{}, fmt.Errorf("read file: %w", err)
+		return ProviderInput{}, err
 	}
-	return ProviderInput{Buffer: data, Filename: path.Base(src)}, nil
+	if in.URL != "" {
+		// 公网 URL：仅当需要下载转存时才拉取（图床上传场景）
+		return h.fetchRemote(in.URL)
+	}
+	return ProviderInput{
+		Buffer:   in.Data,
+		Filename: in.Filename,
+		MimeType: in.MimeType,
+	}, nil
 }
 
 // fetchRemote 下载公网图片为上传输入，限制响应体大小防拖垮内存。

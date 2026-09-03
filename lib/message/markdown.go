@@ -58,6 +58,8 @@ func (msg *MarkdownMessage) Init() {
 	msg.Message = metamsg
 }
 
+func (*MarkdownMessage) part() {}
+
 // Prepare 实现 contract.PreSend：发送前处理 @ 保护 + 图片内嵌（若有图床）。
 func (msg *MarkdownMessage) Prepare() {
 	content := ProtectMarkdownAt(msg.Markdown.Content)
