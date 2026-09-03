@@ -60,6 +60,34 @@ func (c *Client) AccessToken() (string, error) {
 	return c.getAccessToken()
 }
 
+// GatewayBotInfo /gateway/bot 响应：网关地址 + 会话启动限额。
+type GatewayBotInfo struct {
+	URL    string `json:"url"`
+	Shards int    `json:"shards"`
+	Limit  struct {
+		Total         int64 `json:"total"`
+		Remaining     int64 `json:"remaining"`
+		ResetAfter    int64 `json:"reset_after"`     // 毫秒
+		MaxConcurrent int   `json:"max_concurrency"` // 建议的并发连接数
+	} `json:"session_start_limit"`
+}
+
+// GatewayBot 获取网关地址与会话启动限额。remaining 耗尽时需等待 reset_after 再建连。
+func (c *Client) GatewayBot() (*GatewayBotInfo, error) {
+	header, err := c.generateHeader()
+	if err != nil {
+		return nil, err
+	}
+	var result GatewayBotInfo
+	if err := c.Request.Get(fmt.Sprintf("%v/gateway/bot", c.ProxyAPI), &result, header); err != nil {
+		return nil, fmt.Errorf("get gateway bot: %w", err)
+	}
+	if result.URL == "" {
+		return nil, fmt.Errorf("gateway bot url is empty")
+	}
+	return &result, nil
+}
+
 // GatewayURL 获取网关 WebSocket 地址。
 func (c *Client) GatewayURL() (string, error) {
 	header, err := c.generateHeader()
