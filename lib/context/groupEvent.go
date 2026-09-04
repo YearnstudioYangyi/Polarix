@@ -4,6 +4,7 @@ import (
 	"Plrx/lib/qqapi"
 )
 
+// 申请加群
 type ApplyJoinGroupContext struct {
 	*Context
 	Answer  string // 回答答案
@@ -15,12 +16,11 @@ type ApplyJoinGroupContext struct {
 func (ctx *ApplyJoinGroupContext) Init(requestId, groupId, userId string, client *qqapi.Client) {
 	ctx.Context = &Context{}
 	ctx.Context.Init("", requestId, client)
-	ctx.Context.GroupId = groupId
 	ctx.eventId = requestId
 	ctx.groupId = groupId
+	ctx.userId = userId
 	ctx.Context.SetGroupId(groupId)
 	ctx.Context.SetUserId(userId)
-	ctx.userId = userId
 }
 
 // 同意入群
@@ -36,4 +36,16 @@ func (ctx *ApplyJoinGroupContext) Deny(reason string) error {
 // 拒绝并加入黑名单
 func (ctx *ApplyJoinGroupContext) DenyAndAddToBlacklist(reanson string) error {
 	return ctx.Context.Qapi.RejectGroupJoinRequestAndAddToBlacklist(ctx.eventId, ctx.groupId, ctx.userId, reanson)
+}
+
+// 新成员入群
+type GroupMemberAddContext struct {
+	*Context
+}
+
+func (ctx *GroupMemberAddContext) Init(groupId, userId string, client *qqapi.Client) {
+	ctx.Context = &Context{}
+	ctx.Context.Init("", "", client)
+	ctx.SetGroupId(groupId)
+	ctx.SetUserId(userId)
 }

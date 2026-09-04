@@ -189,6 +189,14 @@ func ProcessPayload(payload structers.Payload, client *qqapi.Client) {
 			fmt.Printf("在处理入群请求时出现错误: %v\n\n", err)
 		}
 		return
+	case constant.GROUP_MEMBER_ADD:
+		ctx := &context.GroupMemberAddContext{}
+		ctx.Init(payload.Data.GroupOpenID, payload.Data.MemberOpenId, client)
+		err := plugin.CallGlobalMemberAddHandle(ctx)
+		if err != nil {
+			fmt.Printf("在处理新人入群请求时出现错误: %v\n\n", err)
+		}
+		return
 	}
 }
 
