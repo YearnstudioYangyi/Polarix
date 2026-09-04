@@ -110,32 +110,54 @@ func (c *Client) generateHeader() (map[string]string, error) {
 }
 
 // 发送群消息
-func (c *Client) SendGroupMessage(data []byte, groupId string) error {
+func (c *Client) SendGroupMessage(data []byte, groupId string) (*MessageSendResponse, error) {
 	// 获取请求头
 	header, err := c.generateHeader()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	// log.Printf("发送给%v, data = %v\n", fmt.Sprintf("%v/v2/groups/%v/messages", c.ProxyAPI, groupId), string(data))
-	err = c.Request.Post(fmt.Sprintf("%v/v2/groups/%v/messages", c.ProxyAPI, groupId), data, nil, header)
+	var res *MessageSendResponse = &MessageSendResponse{}
+	err = c.Request.Post(fmt.Sprintf("%v/v2/groups/%v/messages", c.ProxyAPI, groupId), data, &res, header)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return nil
+	return res, nil
 }
 
 // 发送私信消息
-func (c *Client) SendPrivateMessage(data []byte, userId string) error {
+func (c *Client) SendPrivateMessage(data []byte, userId string) (*MessageSendResponse, error) {
 	// 获取请求头
+	header, err := c.generateHeader()
+	if err != nil {
+		return nil, err
+	}
+	var res *MessageSendResponse = &MessageSendResponse{}
+	err = c.Request.Post(fmt.Sprintf("%v/v2/users/%v/messages", c.ProxyAPI, userId), data, &res, header)
+	if err != nil {
+		return nil, err
+	}
+	return res, nil
+}
+
+// 撤回群消息
+func (c *Client) DeleteGroupMessage(groupId, messageId string) error {
 	header, err := c.generateHeader()
 	if err != nil {
 		return err
 	}
-	err = c.Request.Post(fmt.Sprintf("%v/v2/users/%v/messages", c.ProxyAPI, userId), data, nil, header)
+	err = c.Request.Delete(fmt.Sprintf("%v/v2/groups/%v/messages/%v", c.ProxyAPI, groupId, messageId), nil, nil, header)
+	return err
+}
+
+// 撤回私聊消息
+func (c *Client) DeletePrivateMessage(userId, messageId string) error {
+	header, err := c.generateHeader()
 	if err != nil {
 		return err
 	}
-	return nil
+	err = c.Request.Delete(fmt.Sprintf("%v/v2/users/%v/messages/%v", c.ProxyAPI, userId, messageId), nil, nil, header)
+	return err
 }
 
 // SetGroupMemberMute changes one member's mute state in a group. For add and
@@ -210,7 +232,9 @@ func (c *Client) InteracteCallback(eventId string) error {
 	if err != nil {
 		return err
 	}
-	return c.Request.Put(fmt.Sprintf("%v/interactions/%v", c.ProxyAPI, eventId), nil, nil, header)
+	// QQ requires a callback result in the request body. An empty PUT body is
+	// rejected with error 630001 (param invalid).
+	return c.Request.Put(fmt.Sprintf("%v/interactions/%v", c.ProxyAPI, eventId), map[string]int{"code": 0}, nil, header)
 }
 
 // 同意入群请求
