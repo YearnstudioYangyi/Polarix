@@ -218,9 +218,9 @@ func HTTPHandle(c *gin.Context) {
 	log.Printf("[push] external push to %s/%s (%d bytes)", scope, openid, len(payload))
 	var sendErr error
 	if scope == "group" {
-		sendErr = api.SendGroupMessage(payload, openid)
+		_, sendErr = api.SendGroupMessage(payload, openid)
 	} else {
-		sendErr = api.SendPrivateMessage(payload, openid)
+		_, sendErr = api.SendPrivateMessage(payload, openid)
 	}
 	if sendErr != nil {
 		c.JSON(http.StatusBadGateway, pushResponse{Error: sendErr.Error()})

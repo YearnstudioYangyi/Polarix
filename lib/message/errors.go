@@ -1,6 +1,9 @@
 package message
 
-import "fmt"
+import (
+	"Plrx/lib/constant"
+	"fmt"
+)
 
 // 消息对象已经被使用
 type MessageUsed struct {
@@ -29,4 +32,13 @@ type ReplyMessageReachLimit struct{}
 
 func (e *ReplyMessageReachLimit) Error() string {
 	return "Reply message count reached limit: 5"
+}
+
+// 未知的消息目的类型
+type UnknownMessageTarget struct {
+	Target constant.MessageOrigin
+}
+
+func (e *UnknownMessageTarget) Error() string {
+	return fmt.Sprintf("Except message target: group(0)/private(1), received: %v", e.Target)
 }

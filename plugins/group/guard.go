@@ -8,8 +8,10 @@ import (
 	"Plrx/lib/plugin"
 	"Plrx/lib/templates"
 	"fmt"
+	"math/rand"
 	"net/http"
 	"regexp"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -42,6 +44,13 @@ func init() {
 		Role:           constant.RoleOwner,
 		DisablePrivate: true,
 		Handle:         setGroupRule,
+	})
+
+	commands = append(commands, &plugin.Command{
+		Prefix:         "/testverify",
+		Role:           constant.RoleMember,
+		DisablePrivate: true,
+		Handle:         testMathVerify,
 	})
 
 	this := &plugin.Plugin{
@@ -78,6 +87,39 @@ func init() {
 	}
 
 	plugin.Register(this)
+}
+
+func testMathVerify(ctx *context.MessageContext) error {
+	number := rand.Intn(900) + 100
+
+	md := ctx.Markdown(fmt.Sprintf("请点击下方按钮中的**%v**数字", number))
+	position := rand.Intn(4)
+	k := &buttons.Keyboard{}
+	for i := range 5 {
+		if i == position {
+			btn, _ := k.AppendButton("btn-success", strconv.Itoa(number), "验证成功", buttons.Blue, i)
+			btn.SetUserWhiteList([]string{ctx.UserId}).SetCallback(" ", func(cc *context.CallbackContext) error {
+				md.DeleteMessage()
+				cc.Unban()
+				cc.Text("验证成功").Send()
+
+				return nil
+			})
+		} else {
+			var randomNumber int = number
+			for randomNumber == number {
+				randomNumber = rand.Intn(900) + 100
+			}
+			btn, _ := k.AppendButton(fmt.Sprintf("btn-failed-%v", i), strconv.Itoa(randomNumber), "验证失败", buttons.Blue, i)
+			btn.SetUserWhiteList([]string{ctx.UserId}).SetCallback(" ", func(cc *context.CallbackContext) error {
+				md.DeleteMessage()
+				cc.Text("验证失败").Send()
+				return nil
+			})
+		}
+	}
+	md.Keyboard(k)
+	return md.Send()
 }
 
 func setGroupRule(ctx *context.MessageContext) error {

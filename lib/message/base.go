@@ -5,7 +5,6 @@ import (
 	"Plrx/lib/contract"
 	"Plrx/lib/qqapi"
 	"encoding/json"
-	"fmt"
 	"sync"
 )
 
@@ -92,16 +91,42 @@ func (msg *Message) Send() error {
 	// 匹配消息类型
 	switch msg.Target {
 	case constant.GroupMessage:
-		return msg.Qapi.SendGroupMessage(data, msg.GroupId)
+		res, err := msg.Qapi.SendGroupMessage(data, msg.GroupId)
+		if err != nil {
+			return err
+		} else {
+			msg.MsgId = res.Id
+		}
 	case constant.PrivateMessage:
-		return msg.Qapi.SendPrivateMessage(data, msg.UserId)
+		res, err := msg.Qapi.SendPrivateMessage(data, msg.UserId)
+		if err != nil {
+			return err
+		} else {
+			msg.MsgId = res.Id
+		}
 	default:
-		// TODO: 更换为类型
-		return fmt.Errorf("Unknown message target type: %v", msg.Target)
+		return &UnknownMessageTarget{
+			Target: msg.Target,
+		}
 	}
+	return nil
 }
 
 // 设置为主动推送消息
 func (msg *Message) SetInitiativeMessage() {
 	msg.initiativePush = true
+}
+
+// 撤回消息
+func (msg *Message) DeleteMessage() error {
+	switch msg.Target {
+	case constant.GroupMessage:
+		return msg.Qapi.DeleteGroupMessage(msg.GroupId, msg.MsgId)
+	case constant.PrivateMessage:
+		return msg.Qapi.DeletePrivateMessage(msg.UserId, msg.MsgId)
+	default:
+		return &UnknownMessageTarget{
+			Target: msg.Target,
+		}
+	}
 }
