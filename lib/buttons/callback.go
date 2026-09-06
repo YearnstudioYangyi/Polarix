@@ -1,6 +1,9 @@
 package buttons
 
-import "sync"
+import (
+	"strconv"
+	"sync"
+)
 
 type CallbackInfo struct {
 	Handle CallbackButtonHandleFunc
@@ -33,6 +36,15 @@ func RegisterCallbackFunc(id string, handle CallbackButtonHandleFunc) string {
 	nowIndex++
 	if nowIndex > MaxCallbackStorage-1 {
 		// 溢出, 从头开始覆盖
-
+		nowIndex = 0
 	}
+	if nowIndex == startIndex {
+		// 当前位置 与 起始位置重合, 让起始位置后推, 废弃掉前面的数据
+		startIndex++
+		if startIndex > MaxCallbackStorage-1 {
+			// 循环
+			startIndex = 0
+		}
+	}
+	return strconv.Itoa(int(realId))
 }
