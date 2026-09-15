@@ -104,9 +104,16 @@ func (button *Button) SetCallback(data string, handle CallbackButtonHandleFunc) 
 	button.Action.CallbackData = data
 	button.Action.Type = Callback
 	// 添加回调函数
-	CallbackFuncMapLock.Lock()
-	defer CallbackFuncMapLock.Unlock()
-	CallbackFuncMap[button.Id] = handle
+
+	// 旧版本
+	// CallbackFuncMapLock.Lock()
+	// defer CallbackFuncMapLock.Unlock()
+	// CallbackFuncMap[button.Id] = handle
+
+	// 使用新的回调
+	id := RegisterCallbackFunc(button.Id, handle)
+	// 覆盖ID, 防止冲突
+	button.Id = id
 	return button
 }
 

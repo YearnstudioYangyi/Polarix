@@ -146,17 +146,18 @@ func ProcessPayload(payload structers.Payload, client *qqapi.Client) {
 		data := payload.Data.Callback.Resolved.ButtonData
 		buttonId := payload.Data.Callback.Resolved.ButtonId
 		// log.Printf("收到回调按钮推送, 按钮ID = %v", buttonId)
-		callbackFunc, ok := buttons.GetCallbackFunc(buttonId)
-		if !ok {
-			log.Printf("回调按钮: %v未注册回调函数, 跳过处理", buttonId)
-			return
-		}
-		// 找到了回调函数
+		// callbackFunc, ok := buttons.GetCallbackFunc(buttonId)
+		// if !ok {
+		// 	log.Printf("回调按钮: %v未注册回调函数, 跳过处理", buttonId)
+		// 	return
+		// }
 		ctx := &context.CallbackContext{}
 		ctx.Init(payload.ID, client)
 		ctx.ButtonId = buttonId
 		ctx.Data = data
-		ctx.SetGroupId(payload.Data.GroupOpenID)
+		if payload.Data.GroupOpenID != "" {
+			ctx.SetGroupId(payload.Data.GroupOpenID)
+		}
 		userID := payload.Data.Author.MemberOpenID
 		if userID == "" {
 			userID = payload.Data.Author.UserOpenID
@@ -165,7 +166,10 @@ func ProcessPayload(payload structers.Payload, client *qqapi.Client) {
 			userID = payload.Data.Author.UnionID
 		}
 		ctx.SetUserId(userID)
-		go callbackHandleFunc(callbackFunc, ctx)
+		err := buttons.InvokeCallback(buttonId, ctx)
+		if err != nil {
+			fmt.Printf("在处理按钮回调时出错: %v", err)
+		}
 	case constant.GROUP_JOIN_REQUEST:
 		var answer string
 		switch payload.Data.VerifyInfo.Method {
