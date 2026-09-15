@@ -1,6 +1,8 @@
 package buttons
 
 import (
+	"Plrx/lib/context"
+	"fmt"
 	"strconv"
 	"sync"
 )
@@ -47,4 +49,28 @@ func RegisterCallbackFunc(id string, handle CallbackButtonHandleFunc) string {
 		}
 	}
 	return strconv.Itoa(int(realId))
+}
+
+func InvokeCallback(id string, ctx *context.CallbackContext) error {
+	// 获得读锁
+	lock.RLock()
+	targetId, err := strconv.Atoi(id)
+	if err != nil {
+		return fmt.Errorf("Trans id into number failed: %v", err)
+	}
+	// 不可能出现非数字, 直接忽略错误
+	startId, _ := strconv.Atoi(CallbackMap[startIndex].Id)
+	// 计算真实索引
+	realIndex := (targetId - startId + int(startIndex)) % int(MaxCallbackStorage)
+	// 获取数据
+	handle := CallbackMap[realIndex].Handle
+	buttonId := CallbackMap[realIndex].Id
+	// 释放锁, 防止回调函数内注册新的按钮导致的死锁
+	lock.RUnlock()
+	// 判空
+	if handle == nil {
+		return fmt.Errorf("Callback button: %v did not register", id)
+	}
+	ctx.ButtonId = buttonId
+	return handle(ctx)
 }
