@@ -24,7 +24,7 @@ var startIndex uint = 0
 var nowIndex uint = 0
 
 // 同步锁
-var lock *sync.RWMutex = &sync.RWMutex{}
+var lock *sync.Mutex = &sync.Mutex{}
 
 // 保存映射关系并生成真实ID
 func RegisterCallbackFunc(id string, handle CallbackButtonHandleFunc) string {
@@ -53,7 +53,7 @@ func RegisterCallbackFunc(id string, handle CallbackButtonHandleFunc) string {
 
 func InvokeCallback(id string, ctx *context.CallbackContext) error {
 	// 获得读锁
-	lock.RLock()
+	lock.Lock()
 	targetId, err := strconv.Atoi(id)
 	if err != nil {
 		return fmt.Errorf("Trans id into number failed: %v", err)
@@ -66,7 +66,7 @@ func InvokeCallback(id string, ctx *context.CallbackContext) error {
 	handle := CallbackMap[realIndex].Handle
 	buttonId := CallbackMap[realIndex].Id
 	// 释放锁, 防止回调函数内注册新的按钮导致的死锁
-	lock.RUnlock()
+	lock.Unlock()
 	// 判空
 	if handle == nil {
 		return fmt.Errorf("Callback button: %v did not register", id)
