@@ -5,6 +5,7 @@ import (
 	"Plrx/lib/constant"
 	"Plrx/lib/context"
 	"Plrx/lib/email"
+	"Plrx/lib/message"
 	"Plrx/lib/plugin"
 	"Plrx/lib/templates"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 	"net/http"
 	"regexp"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -41,7 +43,7 @@ func init() {
 
 	commands = append(commands, &plugin.Command{
 		Prefix:         "/grouprule",
-		Role:           constant.RoleOwner,
+		Role:           constant.RoleAdmin,
 		DisablePrivate: true,
 		Handle:         setGroupRule,
 	})
@@ -91,8 +93,15 @@ func init() {
 
 func testMathVerify(ctx *context.MessageContext) error {
 	number := rand.Intn(900) + 100
+	var md *message.MarkdownMessage
+	// 尝试获取群规
+	var groupRule string
+	if ok, err := ctx.GroupStorage.Get("group_rule", &groupRule); ok && err == nil {
+		md = ctx.Markdown(fmt.Sprintf("请点击下方按钮中的 **%v** 数字完成人机验证, 验证成功后自动解除禁言\n\n> 完成验证代表您已阅读并同意本群群规: [点击查看群规](%v)", number, groupRule))
+	} else {
+		md = ctx.Markdown(fmt.Sprintf("请点击下方按钮中的 **%v** 数字完成人机验证, 验证成功后自动解除禁言", number))
+	}
 
-	md := ctx.Markdown(fmt.Sprintf("请点击下方按钮中的**%v**数字", number))
 	position := rand.Intn(4)
 	k := &buttons.Keyboard{}
 	for i := range 5 {
@@ -119,6 +128,7 @@ func testMathVerify(ctx *context.MessageContext) error {
 		}
 	}
 	md.Keyboard(k)
+
 	return md.Send()
 }
 
@@ -126,7 +136,7 @@ func setGroupRule(ctx *context.MessageContext) error {
 	if ctx.Content == "" {
 		return ctx.Text("请输入群规URL").Send()
 	}
-	ctx.GroupStorage.Set("group_rule", ctx.Content)
+	ctx.GroupStorage.Set("group_rule", strings.Split(ctx.Content, " ")[1])
 	ctx.Text("已设置群规URL").Send()
 	return nil
 }
