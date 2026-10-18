@@ -1,6 +1,7 @@
 package message
 
 import (
+	"Plrx/lib/constant"
 	"Plrx/lib/contract"
 	"Plrx/lib/templates"
 	"encoding/json"
@@ -48,6 +49,7 @@ func (msg *MarkdownMessage) Init() {
 		// 已有, 重用
 		metamsg = msg.Message
 	}
+	metamsg.Type = constant.Markdown
 	// 建立Marshal接口传递
 	metamsg.MarshalInterface = msg
 	// 储存Message指针

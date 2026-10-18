@@ -537,9 +537,11 @@ func processApprovalRequest(req BotIPCRequest, ipc *ipcConnection) {
 			Qapi:    c,
 			GroupId: cfg.GroupID,
 			Target:  constant.GroupMessage,
+			Type:    constant.Markdown,
 		}).InitRef(),
 	}
 	msg.Init()
+	msg.Type = constant.Markdown
 	msg.SetInitiativeMessage()
 	msg.Content(content)
 	msg.Keyboard(k)

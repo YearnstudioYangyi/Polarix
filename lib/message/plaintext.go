@@ -1,6 +1,9 @@
 package message
 
-import "encoding/json"
+import (
+	"Plrx/lib/constant"
+	"encoding/json"
+)
 
 type TextMessage struct {
 	*Message
@@ -29,6 +32,7 @@ func (msg *TextMessage) Init() {
 		// 已有, 重用
 		metamsg = msg.Message
 	}
+	metamsg.Type = constant.PlainText
 	// 建立Marshal接口传递
 	metamsg.MarshalInterface = msg
 	// 储存Message指针

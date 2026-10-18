@@ -28,6 +28,24 @@ func setupMockQQServer(t *testing.T) (*httptest.Server, *[]string, *sync.Mutex) 
 		defer mu.Unlock()
 
 		if r.Method == http.MethodPost && r.URL.Path == "/v2/groups/test-group-id/messages" {
+			var body map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&body); err == nil {
+				msgType, _ := body["msg_type"].(float64)
+				if msgType == 0 {
+					content, _ := body["content"].(string)
+					if content == "" {
+						w.Header().Set("Content-Type", "application/json")
+						w.WriteHeader(http.StatusBadRequest)
+						_ = json.NewEncoder(w).Encode(map[string]any{
+							"message":  "消息content字段不能为空",
+							"code":     40034030,
+							"err_code": 40034030,
+						})
+						return
+					}
+				}
+			}
+
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
 			_ = json.NewEncoder(w).Encode(map[string]any{
