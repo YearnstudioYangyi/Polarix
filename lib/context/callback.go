@@ -1,6 +1,9 @@
 package context
 
-import "Plrx/lib/qqapi"
+import (
+	"Plrx/lib/constant"
+	"Plrx/lib/qqapi"
+)
 
 // 按钮回调上下文
 type CallbackContext struct {
@@ -8,6 +11,7 @@ type CallbackContext struct {
 	Data     string
 	PluginId string
 	ButtonId string
+	Role     constant.RoleRequired
 }
 
 func (ctx *CallbackContext) Init(eventId string, client *qqapi.Client) {

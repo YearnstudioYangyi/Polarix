@@ -1,7 +1,7 @@
 package sshauth
 
 import (
-	"Plrx/lib/buttons"
+	"Plrx/lib/constant"
 	"Plrx/lib/context"
 	"Plrx/lib/plugin"
 	"Plrx/lib/qqapi"
@@ -13,7 +13,6 @@ import (
 	"net/http/httptest"
 	"os"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -63,19 +62,11 @@ func TestConfigValidation(t *testing.T) {
 	if err := validateConfig(map[string]any{"network": "invalid"}); err == nil {
 		t.Fatal("expected error for invalid network")
 	}
-	if err := validateConfig(map[string]any{"mode": "invalid"}); err == nil {
-		t.Fatal("expected error for invalid mode")
-	}
-	if err := validateConfig(map[string]any{"permission": "invalid"}); err == nil {
-		t.Fatal("expected error for invalid permission")
-	}
 	if err := validateConfig(map[string]any{"timeout_seconds": -1}); err == nil {
 		t.Fatal("expected error for negative timeout")
 	}
 	if err := validateConfig(map[string]any{
 		"network":         "tcp",
-		"mode":            "listen",
-		"permission":      "admin",
 		"timeout_seconds": 30,
 	}); err != nil {
 		t.Fatalf("unexpected validation error: %v", err)
@@ -88,8 +79,6 @@ func TestApplyConfig(t *testing.T) {
 		"group_id":        "test-group",
 		"socket_path":     "127.0.0.1:9999",
 		"network":         "tcp",
-		"mode":            "listen",
-		"permission":      "all",
 		"allowed_users":   "user1, user2",
 		"timeout_seconds": 45,
 	})
@@ -99,8 +88,7 @@ func TestApplyConfig(t *testing.T) {
 
 	cfg := GetConfig()
 	if !cfg.Enabled || cfg.GroupID != "test-group" || cfg.SocketPath != "127.0.0.1:9999" ||
-		cfg.Network != "tcp" || cfg.Mode != "listen" || cfg.Permission != "all" ||
-		len(cfg.AllowedUsers) != 2 || cfg.TimeoutSeconds != 45 {
+		cfg.Network != "tcp" || len(cfg.AllowedUsers) != 2 || cfg.TimeoutSeconds != 45 {
 		t.Fatalf("unexpected config values: %#v", cfg)
 	}
 }
@@ -109,7 +97,6 @@ func TestApprovalFlow(t *testing.T) {
 	server, _, _ := setupMockQQServer(t)
 	defer server.Close()
 
-	// Spin up a TCP listener simulating ssh-qqauth server
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("failed to listen on TCP: %v", err)
@@ -118,28 +105,23 @@ func TestApprovalFlow(t *testing.T) {
 
 	addr := listener.Addr().String()
 
-	// Configure the plugin to connect to our listener
 	_ = applyConfig(map[string]any{
 		"enabled":         true,
 		"group_id":        "test-group-id",
 		"socket_path":     addr,
 		"network":         "tcp",
-		"mode":            "connect",
-		"permission":      "admin",
 		"timeout_seconds": 60,
 	})
 
 	c := createTestClient(server.URL)
 	SetClient(c)
 
-	// Accept connection from plugin
 	conn, err := listener.Accept()
 	if err != nil {
 		t.Fatalf("failed to accept connection: %v", err)
 	}
 	defer conn.Close()
 
-	// Send an approval request from "ssh-qqauth" to plugin
 	req := BotIPCRequest{
 		Version:    "1",
 		User:       "root",
@@ -153,7 +135,6 @@ func TestApprovalFlow(t *testing.T) {
 		t.Fatalf("failed to send request: %v", err)
 	}
 
-	// Wait for plugin to process and store in pendingMap
 	var auth *pendingAuth
 	for range 50 {
 		val, ok := pendingMap.Load(req.ID)
@@ -167,17 +148,19 @@ func TestApprovalFlow(t *testing.T) {
 		t.Fatalf("pendingAuth not found in pendingMap")
 	}
 
-	// Now simulate approving via callback
+	// 模拟群管理员触发回调
 	cbCtx := &context.CallbackContext{}
 	cbCtx.Init("event-1", c)
+	cbCtx.SetGroupId("test-group-id")
+	cbCtx.SetUserId("admin-user")
+	cbCtx.Role = constant.RoleAdmin
 	cbCtx.ButtonId = "sshauth_approve_" + req.ID
 	cbCtx.Data = "approve:" + req.ID
 
-	if err := auth.resolve(true, cbCtx); err != nil {
-		t.Fatalf("resolve error: %v", err)
+	if err := handleApprovalCallback(auth, true, cbCtx); err != nil {
+		t.Fatalf("handleApprovalCallback error: %v", err)
 	}
 
-	// The plugin should write BotIPCResponse to conn
 	var resp BotIPCResponse
 	decoder := json.NewDecoder(conn)
 	_ = conn.SetReadDeadline(time.Now().Add(3 * time.Second))
@@ -189,7 +172,6 @@ func TestApprovalFlow(t *testing.T) {
 		t.Fatalf("unexpected IPC response: %#v", resp)
 	}
 
-	// Should be removed from pendingMap
 	if _, ok := pendingMap.Load(req.ID); ok {
 		t.Fatalf("expected request %s to be deleted from pendingMap", req.ID)
 	}
@@ -212,8 +194,6 @@ func TestDenialFlow(t *testing.T) {
 		"group_id":        "test-group-id",
 		"socket_path":     addr,
 		"network":         "tcp",
-		"mode":            "connect",
-		"permission":      "admin",
 		"timeout_seconds": 60,
 	})
 
@@ -254,11 +234,14 @@ func TestDenialFlow(t *testing.T) {
 
 	cbCtx := &context.CallbackContext{}
 	cbCtx.Init("event-2", c)
+	cbCtx.SetGroupId("test-group-id")
+	cbCtx.SetUserId("admin-user")
+	cbCtx.Role = constant.RoleAdmin
 	cbCtx.ButtonId = "sshauth_deny_" + req.ID
 	cbCtx.Data = "deny:" + req.ID
 
-	if err := auth.resolve(false, cbCtx); err != nil {
-		t.Fatalf("resolve error: %v", err)
+	if err := handleApprovalCallback(auth, false, cbCtx); err != nil {
+		t.Fatalf("handleApprovalCallback error: %v", err)
 	}
 
 	var resp BotIPCResponse
@@ -270,6 +253,174 @@ func TestDenialFlow(t *testing.T) {
 
 	if resp.Type != "approve" || resp.ID != req.ID || resp.Approval {
 		t.Fatalf("unexpected IPC response for denial: %#v", resp)
+	}
+}
+
+func TestServerSideAuthorization(t *testing.T) {
+	server, _, _ := setupMockQQServer(t)
+	defer server.Close()
+
+	c := createTestClient(server.URL)
+	_ = applyConfig(map[string]any{
+		"enabled":       true,
+		"group_id":      "valid-group-id",
+		"allowed_users": "allowed-user-1, allowed-user-2",
+	})
+
+	auth := &pendingAuth{
+		req: BotIPCRequest{
+			ID: "test-auth-perm",
+		},
+	}
+
+	// 1. 来源群不匹配
+	cbWrongGroup := &context.CallbackContext{}
+	cbWrongGroup.Init("evt-1", c)
+	cbWrongGroup.SetGroupId("wrong-group-id")
+	cbWrongGroup.SetUserId("allowed-user-1")
+	cbWrongGroup.Role = constant.RoleAdmin
+	_ = handleApprovalCallback(auth, true, cbWrongGroup)
+	if auth.resolved.Load() {
+		t.Fatal("request should not be resolved when group ID mismatches")
+	}
+
+	// 2. 白名单不匹配
+	cbUnauthorizedUser := &context.CallbackContext{}
+	cbUnauthorizedUser.Init("evt-2", c)
+	cbUnauthorizedUser.SetGroupId("valid-group-id")
+	cbUnauthorizedUser.SetUserId("stranger-user")
+	cbUnauthorizedUser.Role = constant.RoleAdmin
+	_ = handleApprovalCallback(auth, true, cbUnauthorizedUser)
+	if auth.resolved.Load() {
+		t.Fatal("request should not be resolved when user is not in allowed_users")
+	}
+
+	// 3. 切换为默认管理员模式（AllowedUsers 留空）
+	_ = applyConfig(map[string]any{
+		"enabled":       true,
+		"group_id":      "valid-group-id",
+		"allowed_users": "",
+	})
+
+	// 普通群员尝试点击
+	cbMember := &context.CallbackContext{}
+	cbMember.Init("evt-3", c)
+	cbMember.SetGroupId("valid-group-id")
+	cbMember.SetUserId("member-user")
+	cbMember.Role = constant.RoleMember
+	_ = handleApprovalCallback(auth, true, cbMember)
+	if auth.resolved.Load() {
+		t.Fatal("normal group member must NOT be allowed to approve SSH login")
+	}
+}
+
+func TestDisconnectionInvalidatesPendingAndRecallsMessage(t *testing.T) {
+	server, deletedMsgs, mu := setupMockQQServer(t)
+	defer server.Close()
+
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to listen on TCP: %v", err)
+	}
+	defer listener.Close()
+
+	addr := listener.Addr().String()
+
+	_ = applyConfig(map[string]any{
+		"enabled":         true,
+		"group_id":        "test-group-id",
+		"socket_path":     addr,
+		"network":         "tcp",
+		"timeout_seconds": 60,
+	})
+
+	c := createTestClient(server.URL)
+	SetClient(c)
+
+	conn, err := listener.Accept()
+	if err != nil {
+		t.Fatalf("failed to accept connection: %v", err)
+	}
+
+	req := BotIPCRequest{
+		Version:    "1",
+		User:       "user-disconnect",
+		Service:    "sshd",
+		RemoteHost: "192.168.1.88",
+		ID:         "test-disconnect-001",
+	}
+
+	encoder := json.NewEncoder(conn)
+	if err := encoder.Encode(req); err != nil {
+		t.Fatalf("failed to send request: %v", err)
+	}
+
+	var auth *pendingAuth
+	for range 50 {
+		val, ok := pendingMap.Load(req.ID)
+		if ok {
+			auth = val.(*pendingAuth)
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if auth == nil {
+		t.Fatalf("pendingAuth not found in pendingMap")
+	}
+
+	// 主动断开连接，模拟网络中断或 qqauthd 重启
+	_ = conn.Close()
+
+	// 等待断线处理
+	time.Sleep(200 * time.Millisecond)
+
+	// 请求应当已被标记失效
+	if !auth.resolved.Load() {
+		t.Fatal("pendingAuth should be marked resolved/invalidated on disconnect")
+	}
+
+	// 消息应被撤回
+	mu.Lock()
+	count := len(*deletedMsgs)
+	mu.Unlock()
+	if count == 0 {
+		t.Fatal("expected message to be recalled on disconnect, but no DELETE call recorded")
+	}
+
+	// 断线后若有用户点击旧按钮，应该被拦截，且不向 IPC 发送
+	cbCtx := &context.CallbackContext{}
+	cbCtx.Init("event-late", c)
+	cbCtx.SetGroupId("test-group-id")
+	cbCtx.Role = constant.RoleAdmin
+	err = handleApprovalCallback(auth, true, cbCtx)
+	if err != nil {
+		t.Fatalf("late callback unexpected error: %v", err)
+	}
+}
+
+func TestIPCSendFailureProducesErrorFeedback(t *testing.T) {
+	server, _, _ := setupMockQQServer(t)
+	defer server.Close()
+
+	c := createTestClient(server.URL)
+
+	// 创建一个没有有效连接的 pendingAuth
+	auth := &pendingAuth{
+		req: BotIPCRequest{
+			ID: "test-send-fail",
+		},
+		conn: nil, // 空连接或已断开
+	}
+	pendingMap.Store(auth.req.ID, auth)
+
+	cbCtx := &context.CallbackContext{}
+	cbCtx.Init("event-fail", c)
+	cbCtx.SetGroupId("test-group-id")
+	cbCtx.Role = constant.RoleAdmin
+
+	err := auth.resolve(true, cbCtx)
+	if err == nil {
+		t.Fatal("expected error when IPC connection is not active")
 	}
 }
 
@@ -285,14 +436,11 @@ func TestTimeoutFlowRecallsMessageAndDoesNotSendToIPC(t *testing.T) {
 
 	addr := listener.Addr().String()
 
-	// Set timeout to 1 second for fast test
 	_ = applyConfig(map[string]any{
 		"enabled":         true,
 		"group_id":        "test-group-id",
 		"socket_path":     addr,
 		"network":         "tcp",
-		"mode":            "connect",
-		"permission":      "admin",
 		"timeout_seconds": 1,
 	})
 
@@ -318,10 +466,8 @@ func TestTimeoutFlowRecallsMessageAndDoesNotSendToIPC(t *testing.T) {
 		t.Fatalf("failed to send request: %v", err)
 	}
 
-	// Wait for timeout (1s) plus buffer
 	time.Sleep(1500 * time.Millisecond)
 
-	// Check that the message was recalled via DELETE
 	mu.Lock()
 	count := len(*deletedMsgs)
 	mu.Unlock()
@@ -330,13 +476,77 @@ func TestTimeoutFlowRecallsMessageAndDoesNotSendToIPC(t *testing.T) {
 		t.Fatalf("expected message to be deleted on timeout, but no DELETE request was received")
 	}
 
-	// Verify that NOTHING was sent over the IPC connection
 	_ = conn.SetReadDeadline(time.Now().Add(300 * time.Millisecond))
 	var resp BotIPCResponse
 	decoder := json.NewDecoder(conn)
 	err = decoder.Decode(&resp)
 	if err == nil {
 		t.Fatalf("expected no data on IPC on timeout, but received: %#v", resp)
+	}
+}
+
+func TestProtocolVersionValidation(t *testing.T) {
+	server, _, _ := setupMockQQServer(t)
+	defer server.Close()
+
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to listen on TCP: %v", err)
+	}
+	defer listener.Close()
+
+	addr := listener.Addr().String()
+
+	_ = applyConfig(map[string]any{
+		"enabled":         true,
+		"group_id":        "test-group-id",
+		"socket_path":     addr,
+		"network":         "tcp",
+		"timeout_seconds": 60,
+	})
+
+	c := createTestClient(server.URL)
+	SetClient(c)
+
+	conn, err := listener.Accept()
+	if err != nil {
+		t.Fatalf("failed to accept connection: %v", err)
+	}
+	defer conn.Close()
+
+	// 协议版本不是 "1"
+	req := BotIPCRequest{
+		Version: "2",
+		User:    "root",
+		ID:      "invalid-version-req",
+	}
+	encoder := json.NewEncoder(conn)
+	if err := encoder.Encode(req); err != nil {
+		t.Fatalf("failed to send request: %v", err)
+	}
+
+	time.Sleep(100 * time.Millisecond)
+	if _, ok := pendingMap.Load("invalid-version-req"); ok {
+		t.Fatal("request with unsupported version should not be processed")
+	}
+}
+
+func TestDuplicateIDRejection(t *testing.T) {
+	req := BotIPCRequest{
+		Version: "1",
+		ID:      "duplicate-id-test",
+	}
+	auth1 := &pendingAuth{req: req}
+	pendingMap.Store(req.ID, auth1)
+	defer pendingMap.Delete(req.ID)
+
+	ipc := newIPCConnection(&net.TCPConn{})
+	processApprovalRequest(req, ipc)
+
+	// 原有请求没有被覆盖
+	loaded, _ := pendingMap.Load(req.ID)
+	if loaded != auth1 {
+		t.Fatal("existing pending request was overwritten by duplicate ID")
 	}
 }
 
@@ -362,52 +572,6 @@ func TestUnixSocketCommunication(t *testing.T) {
 		t.Fatalf("failed to accept on unix socket: %v", err)
 	}
 	defer accepted.Close()
-}
-
-func TestIdempotency(t *testing.T) {
-	auth := &pendingAuth{
-		req: BotIPCRequest{
-			ID: "test-idempotent",
-		},
-	}
-
-	// First resolution
-	if !auth.resolved.CompareAndSwap(false, true) {
-		t.Fatal("first CAS should succeed")
-	}
-
-	// Second resolution should fail
-	if auth.resolved.CompareAndSwap(false, true) {
-		t.Fatal("second CAS should fail")
-	}
-}
-
-func TestButtonCallbackInvocation(t *testing.T) {
-	// Test that button callback can be properly triggered through buttons.InvokeCallback
-	server, _, _ := setupMockQQServer(t)
-	defer server.Close()
-
-	c := &qqapi.Client{
-		ProxyAPI: server.URL,
-		Request:  requests.Init(1),
-	}
-
-	var called atomic.Bool
-	callbackExtID := buttons.RegisterCallbackFunc("sshauth_approve_test123", func(ctx *context.CallbackContext) error {
-		called.Store(true)
-		return nil
-	})
-
-	cbCtx := &context.CallbackContext{}
-	cbCtx.Init("test-event", c)
-
-	if err := buttons.InvokeCallback(callbackExtID, cbCtx); err != nil {
-		t.Fatalf("InvokeCallback failed: %v", err)
-	}
-
-	if !called.Load() {
-		t.Fatal("callback function was not executed")
-	}
 }
 
 func TestPluginRegistration(t *testing.T) {

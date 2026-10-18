@@ -166,6 +166,7 @@ func ProcessPayload(payload structers.Payload, client *qqapi.Client) {
 			userID = payload.Data.Author.UnionID
 		}
 		ctx.SetUserId(userID)
+		ctx.Role = payload.Data.Author.Role
 		err := buttons.InvokeCallback(buttonId, ctx)
 		if err != nil {
 			fmt.Printf("在处理按钮回调时出错: %v", err)
