@@ -16,6 +16,7 @@ import (
 	"Plrx/lib/templates"
 	_ "Plrx/plugins"
 	plugins_push "Plrx/plugins/push"
+	plugins_sshauth "Plrx/plugins/sshauth"
 	"bytes"
 	"crypto/ed25519"
 	"encoding/hex"
@@ -59,6 +60,7 @@ func main() {
 	}()
 	client := qqapi.Init(appConfig.AppId, appConfig.AppSecret, appConfig.ProxyAPI, requestsClient)
 	plugins_push.SetClient(&client)
+	plugins_sshauth.SetClient(&client)
 	schedule.Start(&client)
 
 	r, wsClient := setupRouter(appConfig, &client)

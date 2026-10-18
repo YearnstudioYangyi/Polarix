@@ -6,5 +6,6 @@ import (
 	_ "Plrx/plugins/group"
 	_ "Plrx/plugins/imagegen"
 	_ "Plrx/plugins/push"
+	_ "Plrx/plugins/sshauth"
 	_ "Plrx/plugins/uptime"
 )
