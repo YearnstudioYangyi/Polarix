@@ -15,7 +15,14 @@ type Plugin struct {
 	Group  []string `json:"group"`
 }
 
+type WebSocketConfig struct {
+	Intents int    `json:"intents,omitempty"`
+	Shard   []int  `json:"shard,omitempty"`
+	Gateway string `json:"gateway,omitempty"`
+}
+
 type AppConfig struct {
+	Mode           string                    `json:"mode"`
 	Port           uint16                    `json:"port"`
 	AppId          string                    `json:"appid"`
 	AppSecret      string                    `json:"secret"`
@@ -27,6 +34,7 @@ type AppConfig struct {
 	AdminPassword  string                    `json:"admin_password"`
 	PluginSettings map[string]map[string]any `json:"plugin_settings"`
 	PluginAccess   map[string]AccessConfig   `json:"plugin_access"`
+	WebSocket      WebSocketConfig           `json:"websocket,omitempty"`
 }
 
 type AccessRule struct {
@@ -55,6 +63,9 @@ func InitConfig() AppConfig {
 	}
 	if appConfig.Database == "" {
 		appConfig.Database = "bot.db"
+	}
+	if appConfig.Mode == "" {
+		appConfig.Mode = "webhook"
 	}
 	return appConfig
 }

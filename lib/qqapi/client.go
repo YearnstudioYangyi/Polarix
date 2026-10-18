@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -51,6 +52,55 @@ func Init(AppID string, AppSecret string, ProxyAPI string, requests *requests.Cl
 		accessToken: "",
 		lock:        sync.RWMutex{},
 	}
+}
+
+// GetAccessToken 获取或刷新 AccessToken
+func (c *Client) GetAccessToken() (string, error) {
+	return c.getAccessToken()
+}
+
+// SetAccessTokenForTest 用于测试时注入 AccessToken
+func (c *Client) SetAccessTokenForTest(token string, expireAt time.Time) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	c.accessToken = token
+	c.expireAt = expireAt
+}
+
+type SessionStartLimit struct {
+	Total          int `json:"total"`
+	Remaining      int `json:"remaining"`
+	ResetAfter     int `json:"reset_after"`
+	MaxConcurrency int `json:"max_concurrency"`
+}
+
+type GatewayInfo struct {
+	URL               string            `json:"url"`
+	Shards            int               `json:"shards,omitempty"`
+	SessionStartLimit SessionStartLimit `json:"session_start_limit,omitempty"`
+}
+
+// GetGateway 获取 WSS 网关地址及分片信息
+func (c *Client) GetGateway() (*GatewayInfo, error) {
+	header, err := c.generateHeader()
+	if err != nil {
+		return nil, err
+	}
+	baseURL := strings.TrimRight(c.ProxyAPI, "/")
+	if baseURL == "" {
+		baseURL = "https://api.bot.qq.com"
+	}
+
+	var res GatewayInfo
+	err = c.Request.Get(fmt.Sprintf("%v/gateway/bot", baseURL), &res, header)
+	if err != nil {
+		// 降级尝试 /gateway
+		err = c.Request.Get(fmt.Sprintf("%v/gateway", baseURL), &res, header)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get gateway: %w", err)
+		}
+	}
+	return &res, nil
 }
 
 // 生成Access Token

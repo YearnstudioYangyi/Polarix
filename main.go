@@ -5,6 +5,7 @@ import (
 	"Plrx/lib/config"
 	"Plrx/lib/constant"
 	appcontext "Plrx/lib/context"
+	"Plrx/lib/gateway"
 	"Plrx/lib/middleware"
 	"Plrx/lib/plugin"
 	"Plrx/lib/qqapi"
@@ -59,6 +60,20 @@ func main() {
 	client := qqapi.Init(appConfig.AppId, appConfig.AppSecret, appConfig.ProxyAPI, requestsClient)
 	plugins_push.SetClient(&client)
 	schedule.Start(&client)
+
+	r, wsClient := setupRouter(appConfig, &client)
+	if wsClient != nil {
+		go wsClient.Start()
+	}
+
+	log.Printf("Server running on %v", appConfig.Port)
+	log.Printf("注册了%v个Markdown模板", templates.GetMarkdownTemplateCount())
+	log.Printf("注册了%v个指令", plugin.GetCommandCount())
+	log.Printf("注册了%v个定时任务", schedule.GetJobCount())
+	r.Run(fmt.Sprintf(":%v", appConfig.Port))
+}
+
+func setupRouter(appConfig config.AppConfig, client *qqapi.Client) (*gin.Engine, *gateway.Client) {
 	r := gin.Default()
 	admin.Register(r, appConfig.AdminPassword)
 	r.Any("/_plugin/:plugin/:token", func(c *gin.Context) {
@@ -68,52 +83,61 @@ func main() {
 	// 主动推送接口 (不经过QQ签名校验)
 	r.POST("/push/:scope/:openid", plugins_push.HTTPHandle)
 
-	// 仅 webhook 需要QQ签名校验
-	webhook := r.Group("/")
-	webhook.Use(middleware.VerifySignature(appConfig.AppSecret))
-	webhook.POST("/webhook", func(c *gin.Context) {
-		c.Status(http.StatusOK)
-		// 中间件已提取
-		var payload structers.Payload
-		if err := c.ShouldBindJSON(&payload); err != nil {
-			return
-		}
-		// rawJson, _ := json.MarshalIndent(payload, "", "  ")
-		// fmt.Printf("[Raw]%v\n\n", string(rawJson))
-		// Op = 13, 签名验证
-		if payload.Op == 13 {
-			// log.Printf("[Webhook] 收到平台网络探测/验证请求")
+	mode := strings.ToLower(strings.TrimSpace(appConfig.Mode))
+	if mode == "" {
+		mode = "webhook"
+	}
 
-			// 再次利用相同的 seed 计算私钥用于回包签名
-			seed := appConfig.AppSecret
-			for len(seed) < ed25519.SeedSize {
-				seed = strings.Repeat(seed, 2)
+	// 模式 1: Webhook 接收事件
+	if mode == "webhook" || mode == "both" {
+		log.Printf("[模式] 启用 WebHook 监听 (/webhook)")
+		webhook := r.Group("/")
+		webhook.Use(middleware.VerifySignature(appConfig.AppSecret))
+		webhook.POST("/webhook", func(c *gin.Context) {
+			c.Status(http.StatusOK)
+			var payload structers.Payload
+			if err := c.ShouldBindJSON(&payload); err != nil {
+				return
 			}
-			reader := strings.NewReader(seed[:ed25519.SeedSize])
-			_, privateKey, _ := ed25519.GenerateKey(reader)
+			// Op = 13, 签名验证
+			if payload.Op == 13 {
+				seed := appConfig.AppSecret
+				for len(seed) < ed25519.SeedSize {
+					seed = strings.Repeat(seed, 2)
+				}
+				reader := strings.NewReader(seed[:ed25519.SeedSize])
+				_, privateKey, _ := ed25519.GenerateKey(reader)
 
-			var msg bytes.Buffer
-			msg.WriteString(payload.Data.EventTs)
-			msg.WriteString(payload.Data.PlainToken)
+				var msg bytes.Buffer
+				msg.WriteString(payload.Data.EventTs)
+				msg.WriteString(payload.Data.PlainToken)
 
-			signature := hex.EncodeToString(ed25519.Sign(privateKey, msg.Bytes()))
-			c.JSON(http.StatusOK, gin.H{
-				"plain_token": payload.Data.PlainToken,
-				"signature":   signature,
-			})
-			return
-		}
+				signature := hex.EncodeToString(ed25519.Sign(privateKey, msg.Bytes()))
+				c.JSON(http.StatusOK, gin.H{
+					"plain_token": payload.Data.PlainToken,
+					"signature":   signature,
+				})
+				return
+			}
 
-		if !constant.IsValidEventType(payload.T) {
-			return
-		}
-		payload.EventType = constant.EventType(payload.T)
-		go middleware.ProcessPayload(payload, &client)
-	})
+			if !constant.IsValidEventType(payload.T) {
+				return
+			}
+			payload.EventType = constant.EventType(payload.T)
+			go middleware.ProcessPayload(payload, client)
+		})
+	}
 
-	log.Printf("Server running on %v", appConfig.Port)
-	log.Printf("注册了%v个Markdown模板", templates.GetMarkdownTemplateCount())
-	log.Printf("注册了%v个指令", plugin.GetCommandCount())
-	log.Printf("注册了%v个定时任务", schedule.GetJobCount())
-	r.Run(fmt.Sprintf(":%v", appConfig.Port))
+	var wsClient *gateway.Client
+	// 模式 2: WebSocket 长连接接收事件
+	if mode == "websocket" || mode == "both" {
+		log.Printf("[模式] 启用 WebSocket 网关客户端")
+		wsClient = gateway.NewClient(gateway.Config{
+			Intents: appConfig.WebSocket.Intents,
+			Shard:   appConfig.WebSocket.Shard,
+			Gateway: appConfig.WebSocket.Gateway,
+		}, client)
+	}
+
+	return r, wsClient
 }

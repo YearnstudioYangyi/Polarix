@@ -11,6 +11,7 @@ type Payload struct {
 	Op        int                `json:"op"`
 	Data      PrasedData         `json:"d"`
 	T         string             `json:"t"`
+	S         int64              `json:"s,omitempty"`
 	EventType constant.EventType `json:"-"`
 }
 
