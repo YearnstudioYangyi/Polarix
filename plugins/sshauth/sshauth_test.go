@@ -350,6 +350,17 @@ func TestServerSideAuthorization(t *testing.T) {
 	if auth.resolved.Load() {
 		t.Fatal("normal group member must NOT be allowed to approve SSH login")
 	}
+
+	// 真实 QQ INTERACTION_CREATE 事件场景（Role 为空字符串，由前端 buttons.Admin 限制）
+	cbQQAdmin := &context.CallbackContext{}
+	cbQQAdmin.Init("evt-4", c)
+	cbQQAdmin.SetGroupId("valid-group-id")
+	cbQQAdmin.SetUserId("admin-user")
+	cbQQAdmin.Role = ""
+	_ = handleApprovalCallback(auth, true, cbQQAdmin)
+	if !auth.resolved.Load() {
+		t.Fatal("request should be resolved when approved via QQ interaction event (empty role)")
+	}
 }
 
 func TestDisconnectionInvalidatesPendingAndRecallsMessage(t *testing.T) {

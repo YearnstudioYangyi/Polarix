@@ -18,14 +18,17 @@ type Payload struct {
 type CallbackData struct {
 	ButtonData string `json:"button_data"`
 	ButtonId   string `json:"button_id"`
+	UserId     string `json:"user_id,omitempty"`
 }
 
 type PrasedData struct {
-	Id           string               `json:"id"`
-	Content      string               `json:"content"`
-	GroupOpenID  string               `json:"group_openid"`
-	MemberOpenId string               `json:"member_openid"` // 入群验证时传递的member_id
-	Attachments  []message.Attachment `json:"attachments"`
+	Id                string               `json:"id"`
+	Content           string               `json:"content"`
+	GroupOpenID       string               `json:"group_openid"`
+	MemberOpenId      string               `json:"member_openid"` // 入群验证时传递的member_id
+	GroupMemberOpenID string               `json:"group_member_openid"`
+	UserOpenID        string               `json:"user_openid"`
+	Attachments       []message.Attachment `json:"attachments"`
 	Author       struct {
 		ID           string                `json:"id"`
 		UserOpenID   string                `json:"user_openid"`

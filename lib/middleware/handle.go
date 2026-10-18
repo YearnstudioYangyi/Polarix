@@ -158,7 +158,19 @@ func ProcessPayload(payload structers.Payload, client *qqapi.Client) {
 		if payload.Data.GroupOpenID != "" {
 			ctx.SetGroupId(payload.Data.GroupOpenID)
 		}
-		userID := payload.Data.Author.MemberOpenID
+		userID := payload.Data.GroupMemberOpenID
+		if userID == "" {
+			userID = payload.Data.UserOpenID
+		}
+		if userID == "" {
+			userID = payload.Data.Callback.Resolved.UserId
+		}
+		if userID == "" {
+			userID = payload.Data.MemberOpenId
+		}
+		if userID == "" {
+			userID = payload.Data.Author.MemberOpenID
+		}
 		if userID == "" {
 			userID = payload.Data.Author.UserOpenID
 		}

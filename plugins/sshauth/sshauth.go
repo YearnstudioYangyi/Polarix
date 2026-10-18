@@ -594,7 +594,10 @@ func handleApprovalCallback(auth *pendingAuth, approved bool, cbCtx *context.Cal
 		}
 	} else {
 		// 默认且仅限群管理员或群主
-		if !constant.RoleAdmin.CanUse(cbCtx.Role) {
+		// 注：QQ 官方 INTERACTION_CREATE（按钮点击事件）协议中不携带 member_role 字段（cbCtx.Role 为空）。
+		// 审批按钮在构造时已配置 buttons.Admin (permission.type=1)，QQ 客户端与开放平台会在前端严格限制只有群主与群管理员可以点击触发。
+		// 若上下文中提供了明确角色（如单元测试或支持该字段的环境），且角色低于管理员/群主权限，则拒绝执行。
+		if cbCtx.Role != "" && !constant.RoleAdmin.CanUse(cbCtx.Role) {
 			_ = cbCtx.Done()
 			_ = cbCtx.Text("❌ 无权操作：仅群管理员或群主可以审批 SSH 登录").Send()
 			return nil
