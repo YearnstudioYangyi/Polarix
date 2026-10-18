@@ -10,7 +10,9 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"runtime"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -123,7 +125,43 @@ func (c *Client) getGatewayURL() (string, error) {
 	if info.URL == "" {
 		return "", errors.New("网关返回的 URL 为空")
 	}
-	return info.URL, nil
+
+	proxyAPI := ""
+	if c.qqClient != nil {
+		proxyAPI = c.qqClient.ProxyAPI
+	}
+	return resolveGatewayURL(info.URL, proxyAPI), nil
+}
+
+// resolveGatewayURL 将官方网关地址与已配置的反向代理（IP 白名单代理）融合。
+// 当配置了第三方反向代理时，自动将 WebSocket 连接路由至该反向代理对应的 WebSocket 端口/路径。
+func resolveGatewayURL(rawGateway, proxyAPI string) string {
+	if proxyAPI == "" {
+		return rawGateway
+	}
+	pURL, err := url.Parse(proxyAPI)
+	if err != nil || pURL.Host == "" {
+		return rawGateway
+	}
+	// 如果 proxyAPI 是腾讯官方域名，则不重写
+	host := strings.ToLower(pURL.Hostname())
+	if strings.Contains(host, "qq.com") {
+		return rawGateway
+	}
+
+	gURL, err := url.Parse(rawGateway)
+	if err != nil {
+		return rawGateway
+	}
+
+	// 协议转换：http -> ws, https -> wss
+	scheme := "ws"
+	if strings.EqualFold(pURL.Scheme, "https") || strings.EqualFold(pURL.Scheme, "wss") {
+		scheme = "wss"
+	}
+	gURL.Scheme = scheme
+	gURL.Host = pURL.Host
+	return gURL.String()
 }
 
 // connect 建立一次完整的 WebSocket 连接生命周期
@@ -253,13 +291,15 @@ func (c *Client) sendIdentify() error {
 	data := IdentifyData{
 		Token:   fmt.Sprintf("QQBot %s", token),
 		Intents: c.config.Intents,
-		Shard:   [2]int{c.config.Shard[0], c.config.Shard[1]},
-		Properties: map[string]string{
-			"$os":      runtime.GOOS,
-			"$browser": "Plrx",
-			"$device":  "Plrx",
-		},
 	}
+	if len(c.config.Shard) >= 2 {
+		data.Shard = []uint32{uint32(c.config.Shard[0]), uint32(c.config.Shard[1])}
+	}
+	data.Properties.OS = runtime.GOOS
+	data.Properties.Browser = "BotGo"
+	data.Properties.Device = "BotGo"
+
+	log.Printf("[WebSocket] Identify 参数: Intents=%d, Shard=%v, Token前缀=%s", data.Intents, data.Shard, token[:min(10, len(token))]+"...")
 
 	msg := struct {
 		Op int          `json:"op"`
@@ -379,7 +419,7 @@ func (c *Client) readLoop() error {
 			c.closeConn()
 			return errors.New("server requested reconnect")
 		case constant.OpCodeInvalidSession:
-			log.Printf("[WebSocket] 会话无效 (OpCode 9), 将清除 Session 并重新鉴权")
+			log.Printf("[WebSocket] 会话无效 (OpCode 9), 收到内容: %s", string(msg.D))
 			c.stateMu.Lock()
 			c.sessionID = ""
 			atomic.StoreInt64(&c.latestSeq, 0)

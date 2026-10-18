@@ -21,12 +21,22 @@ import (
 )
 
 const (
-	PluginID               = "sshauth"
-	DefaultSocketPath      = "/tmp/botipc-dev.sock"
-	DefaultNetwork         = "unix"
+	PluginID              = "sshauth"
+	DefaultSocketPath     = "/tmp/botipc-dev.sock"
+	SocketNetwork         = "unix"
 	DefaultTimeoutSeconds = 60
-	MaxPendingRequests     = 100
-	IOWriteTimeout         = 3 * time.Second
+	MaxPendingRequests    = 100
+	IOWriteTimeout        = 3 * time.Second
+)
+
+type RequestStatus int32
+
+const (
+	StatusPending RequestStatus = iota
+	StatusDelivered
+	StatusDeliveryFailed
+	StatusTimedOut
+	StatusInvalidated
 )
 
 // BotIPCRequest matches the request sent by ssh-qqauth
@@ -50,7 +60,6 @@ type Config struct {
 	Enabled        bool
 	GroupID        string
 	SocketPath     string
-	Network        string
 	AllowedUsers   []string
 	TimeoutSeconds int
 }
@@ -110,7 +119,23 @@ type pendingAuth struct {
 	conn      *ipcConnection
 	timer     *time.Timer
 	resolved  atomic.Bool
+	status    atomic.Int32
 	createdAt time.Time
+	mu        sync.Mutex
+}
+
+func (a *pendingAuth) cleanup() {
+	a.mu.Lock()
+	if a.timer != nil {
+		a.timer.Stop()
+	}
+	a.mu.Unlock()
+
+	pendingMap.Delete(a.req.ID)
+	if a.conn != nil {
+		a.conn.pending.Delete(a.req.ID)
+	}
+	pendingCounter.Add(-1)
 }
 
 var (
@@ -119,7 +144,6 @@ var (
 	config  Config = Config{
 		Enabled:        true,
 		SocketPath:     DefaultSocketPath,
-		Network:        DefaultNetwork,
 		TimeoutSeconds: DefaultTimeoutSeconds,
 	}
 
@@ -152,17 +176,10 @@ func init() {
 			},
 			{
 				Key:         "socket_path",
-				Label:       "IPC Socket 地址",
-				Description: "Unix Socket 路径或 TCP 地址 (如 /tmp/botipc-dev.sock 或 127.0.0.1:9090)",
+				Label:       "IPC Socket 路径",
+				Description: "Unix Domain Socket 路径 (如 /tmp/botipc-dev.sock)",
 				Type:        plugin.ConfigFieldTypeText,
 				Placeholder: DefaultSocketPath,
-			},
-			{
-				Key:         "network",
-				Label:       "网络类型",
-				Description: "unix 或 tcp (默认为 unix)",
-				Type:        plugin.ConfigFieldTypeText,
-				Placeholder: DefaultNetwork,
 			},
 			{
 				Key:         "allowed_users",
@@ -222,10 +239,10 @@ func parseAllowedUsers(raw string) []string {
 }
 
 func validateConfig(values map[string]any) error {
-	network, _ := values["network"].(string)
-	network = strings.ToLower(strings.TrimSpace(network))
-	if network != "" && network != "unix" && network != "tcp" {
-		return fmt.Errorf("network 必须是 'unix' 或 'tcp'")
+	if netVal, ok := values["network"].(string); ok && strings.TrimSpace(netVal) != "" {
+		if strings.ToLower(strings.TrimSpace(netVal)) != SocketNetwork {
+			return fmt.Errorf("仅支持 Unix Domain Socket 通信，不支持网络类型 %q", netVal)
+		}
 	}
 
 	timeout, _ := values["timeout_seconds"].(int)
@@ -241,7 +258,6 @@ func applyConfig(values map[string]any) error {
 	next := Config{
 		Enabled:        true,
 		SocketPath:     DefaultSocketPath,
-		Network:        DefaultNetwork,
 		TimeoutSeconds: DefaultTimeoutSeconds,
 	}
 
@@ -253,9 +269,6 @@ func applyConfig(values map[string]any) error {
 	}
 	if socketPath, ok := values["socket_path"].(string); ok && strings.TrimSpace(socketPath) != "" {
 		next.SocketPath = strings.TrimSpace(socketPath)
-	}
-	if network, ok := values["network"].(string); ok && strings.TrimSpace(network) != "" {
-		next.Network = strings.ToLower(strings.TrimSpace(network))
 	}
 	if allowedUsers, ok := values["allowed_users"].(string); ok {
 		next.AllowedUsers = parseAllowedUsers(allowedUsers)
@@ -309,7 +322,7 @@ func restartWorker() {
 }
 
 func runConnector(cfg Config, stopCh <-chan struct{}) {
-	log.Printf("[sshauth] IPC connector worker started for %s (%s)", cfg.SocketPath, cfg.Network)
+	log.Printf("[sshauth] IPC connector worker started for %s (unix)", cfg.SocketPath)
 
 	for {
 		select {
@@ -318,7 +331,7 @@ func runConnector(cfg Config, stopCh <-chan struct{}) {
 		default:
 		}
 
-		conn, err := net.DialTimeout(cfg.Network, cfg.SocketPath, 3*time.Second)
+		conn, err := net.DialTimeout(SocketNetwork, cfg.SocketPath, 3*time.Second)
 		if err != nil {
 			select {
 			case <-stopCh:
@@ -333,7 +346,7 @@ func runConnector(cfg Config, stopCh <-chan struct{}) {
 		currentConn = ipc
 		workerMu.Unlock()
 
-		log.Printf("[sshauth] successfully connected to IPC server at %s (%s)", cfg.SocketPath, cfg.Network)
+		log.Printf("[sshauth] successfully connected to IPC server at %s (unix)", cfg.SocketPath)
 		handleConnection(ipc, stopCh)
 
 		workerMu.Lock()
@@ -415,9 +428,10 @@ func processApprovalRequest(req BotIPCRequest, ipc *ipcConnection) {
 		return
 	}
 
-	// 限制并发待审批请求数
-	if pendingCounter.Load() >= MaxPendingRequests {
-		log.Printf("[sshauth] too many pending requests (>= %d), dropping request %s", MaxPendingRequests, req.ID)
+	// 1. 先原子预留容量，再决定是否继续
+	if pendingCounter.Add(1) > MaxPendingRequests {
+		pendingCounter.Add(-1)
+		log.Printf("[sshauth] too many pending requests (> %d), dropping request %s", MaxPendingRequests, req.ID)
 		return
 	}
 
@@ -432,17 +446,19 @@ func processApprovalRequest(req BotIPCRequest, ipc *ipcConnection) {
 		createdAt: time.Now(),
 	}
 
-	// 先准备定时器（消除竞态：在存入 map 和注册回调前创建）
-	auth.timer = time.AfterFunc(time.Duration(timeoutSec)*time.Second, auth.onTimeout)
-
-	// 尝试原子注册到全局 pendingMap，防止同 ID 冲突
+	// 2. 尝试原子注册到全局 pendingMap，防止同 ID 冲突
 	if _, loaded := pendingMap.LoadOrStore(req.ID, auth); loaded {
-		auth.timer.Stop()
+		pendingCounter.Add(-1)
 		log.Printf("[sshauth] duplicate pending request ID %s, ignoring", req.ID)
 		return
 	}
 	ipc.pending.Store(req.ID, auth)
-	pendingCounter.Add(1)
+
+	// 如果 IPC 连接已关闭，立即作废该请求
+	if !ipc.active.Load() {
+		auth.invalidate("与 SSH 认证服务断开连接")
+		return
+	}
 
 	user := req.User
 	if user == "" {
@@ -515,7 +531,7 @@ func processApprovalRequest(req BotIPCRequest, ipc *ipcConnection) {
 		denyBtn.SetPermission(buttons.Admin)
 	}
 
-	// 发送主动群消息
+	// 构造主动群消息
 	msg := &message.MarkdownMessage{
 		Message: (&message.Message{
 			Qapi:    c,
@@ -528,13 +544,28 @@ func processApprovalRequest(req BotIPCRequest, ipc *ipcConnection) {
 	msg.Content(content)
 	msg.Keyboard(k)
 
-	auth.msg = msg
-
+	// 发送消息
 	if err := msg.Send(); err != nil {
 		auth.invalidate("群消息发送失败")
 		log.Printf("[sshauth] failed to send approval message for %s to group %s: %v", req.ID, cfg.GroupID, err)
 		return
 	}
+
+	// 消息发送成功后，检查请求是否在此期间已被废弃（例如连接断开或服务重启）
+	auth.mu.Lock()
+	auth.msg = msg
+	if auth.resolved.Load() {
+		auth.mu.Unlock()
+		log.Printf("[sshauth] request %s was already resolved/invalidated during sending, recalling message %s", req.ID, msg.MsgId)
+		if msg.MsgId != "" {
+			_ = msg.DeleteMessage()
+		}
+		return
+	}
+
+	// 将审批超时与“消息发送完成后的有效审批窗口”对应起来，此时启动定时器
+	auth.timer = time.AfterFunc(time.Duration(timeoutSec)*time.Second, auth.onTimeout)
+	auth.mu.Unlock()
 
 	log.Printf("[sshauth] sent approval message for request %s (msg_id: %s) to group %s", req.ID, msg.MsgId, cfg.GroupID)
 }
@@ -581,16 +612,8 @@ func (a *pendingAuth) resolve(approved bool, cbCtx *context.CallbackContext) err
 		return nil
 	}
 
-	// 抢占成功后再停止 timer 并移出 map
-	if a.timer != nil {
-		a.timer.Stop()
-	}
-
-	pendingMap.Delete(a.req.ID)
-	if a.conn != nil {
-		a.conn.pending.Delete(a.req.ID)
-	}
-	pendingCounter.Add(-1)
+	// 抢占成功后统一执行 cleanup（停止 timer，移出 map，归还待审批计数）
+	a.cleanup()
 
 	if cbCtx != nil {
 		_ = cbCtx.Done()
@@ -603,7 +626,7 @@ func (a *pendingAuth) resolve(approved bool, cbCtx *context.CallbackContext) err
 		Approval: approved,
 	}
 
-	// 必须先向 IPC 发送，并根据返回结果决定反馈
+	// 先向 IPC 发送，并根据返回结果决定反馈与后续清理
 	var sendErr error
 	if a.conn != nil && a.conn.active.Load() {
 		sendErr = a.conn.SendResponse(resp)
@@ -617,16 +640,31 @@ func (a *pendingAuth) resolve(approved bool, cbCtx *context.CallbackContext) err
 	}
 
 	if sendErr != nil {
-		log.Printf("[sshauth] ❌ 审批响应向 IPC 发送失败 %s: %v", a.req.ID, sendErr)
+		a.status.Store(int32(StatusDeliveryFailed))
+		log.Printf("[sshauth] ❌ 审批响应向 IPC 发送失败 %s (标记为交付失败并撤回审批消息): %v", a.req.ID, sendErr)
+
+		// 发送失败时明确撤回群消息，避免残留按钮继续误导群用户
+		a.mu.Lock()
+		msg := a.msg
+		a.mu.Unlock()
+		if msg != nil && msg.MsgId != "" {
+			if err := msg.DeleteMessage(); err != nil {
+				log.Printf("[sshauth] failed to recall message %s after IPC delivery failure for request %s: %v", msg.MsgId, a.req.ID, err)
+			} else {
+				log.Printf("[sshauth] successfully recalled message %s after IPC delivery failure for request %s", msg.MsgId, a.req.ID)
+			}
+		}
+
 		if cbCtx != nil {
-			_ = cbCtx.Text(fmt.Sprintf("❌ 审批%s失败：向 SSH 服务交付结果失败 (%v)，本次操作未生效", actionName, sendErr)).Send()
+			_ = cbCtx.Text(fmt.Sprintf("❌ 审批%s失败：向 SSH 认证服务交付响应失败 (%v)。该审批已作废，原审批消息已撤回。", actionName, sendErr)).Send()
 		}
 		return sendErr
 	}
 
-	log.Printf("[sshauth] ✅ 成功向 IPC 传递审批结果 %s: approval=%v", a.req.ID, approved)
+	a.status.Store(int32(StatusDelivered))
+	log.Printf("[sshauth] 📤 审批响应已发送至 IPC %s: approval=%v (本地已写入，最终生效取决于 ssh-qqauth 状态)", a.req.ID, approved)
 	if cbCtx != nil {
-		_ = cbCtx.Text(fmt.Sprintf("✅ 已%s来自 %s 的 %s 登录申请 (ID: %s)", actionName, a.req.RemoteHost, a.req.User, a.req.ID)).Send()
+		_ = cbCtx.Text(fmt.Sprintf("✅ 审批响应已发送：%s来自 %s 的 %s 登录申请 (ID: %s)。", actionName, a.req.RemoteHost, a.req.User, a.req.ID)).Send()
 	}
 
 	return nil
@@ -637,11 +675,8 @@ func (a *pendingAuth) onTimeout() {
 		return // 已经被 resolve 或 invalidate 抢占
 	}
 
-	pendingMap.Delete(a.req.ID)
-	if a.conn != nil {
-		a.conn.pending.Delete(a.req.ID)
-	}
-	pendingCounter.Add(-1)
+	a.status.Store(int32(StatusTimedOut))
+	a.cleanup()
 
 	stateMu.RLock()
 	timeoutSec := config.TimeoutSeconds
@@ -650,35 +685,34 @@ func (a *pendingAuth) onTimeout() {
 	log.Printf("[sshauth] Request %s timed out after %d seconds. Recalling message (not passing to IPC)...", a.req.ID, timeoutSec)
 
 	// 超时则撤回群消息，不向 IPC 传递
-	if a.msg != nil && a.msg.MsgId != "" {
-		if err := a.msg.DeleteMessage(); err != nil {
-			log.Printf("[sshauth] failed to recall timed-out message %s for request %s: %v", a.msg.MsgId, a.req.ID, err)
+	a.mu.Lock()
+	msg := a.msg
+	a.mu.Unlock()
+	if msg != nil && msg.MsgId != "" {
+		if err := msg.DeleteMessage(); err != nil {
+			log.Printf("[sshauth] failed to recall timed-out message %s for request %s: %v", msg.MsgId, a.req.ID, err)
 		} else {
-			log.Printf("[sshauth] successfully recalled timed-out message %s for request %s", a.msg.MsgId, a.req.ID)
+			log.Printf("[sshauth] successfully recalled timed-out message %s for request %s", msg.MsgId, a.req.ID)
 		}
 	}
 }
 
-// invalidate 在连接断开或服务重启时调用，使请求失效并撤回消息
+// invalidate 在连接断开、服务重启或发送失败时调用，使请求失效并撤回消息
 func (a *pendingAuth) invalidate(reason string) {
 	if !a.resolved.CompareAndSwap(false, true) {
 		return
 	}
 
-	if a.timer != nil {
-		a.timer.Stop()
-	}
-
-	pendingMap.Delete(a.req.ID)
-	if a.conn != nil {
-		a.conn.pending.Delete(a.req.ID)
-	}
-	pendingCounter.Add(-1)
+	a.status.Store(int32(StatusInvalidated))
+	a.cleanup()
 
 	log.Printf("[sshauth] Request %s invalidated (%s). Recalling message...", a.req.ID, reason)
 
-	if a.msg != nil && a.msg.MsgId != "" {
-		_ = a.msg.DeleteMessage()
+	a.mu.Lock()
+	msg := a.msg
+	a.mu.Unlock()
+	if msg != nil && msg.MsgId != "" {
+		_ = msg.DeleteMessage()
 	}
 }
 
@@ -716,10 +750,10 @@ func statusCommand(ctx *context.MessageContext) error {
 	text := fmt.Sprintf("### 🛡️ SSH 登录认证插件状态\n\n"+
 		"- **状态**: %s\n"+
 		"- **授权群 OpenID**: `%s`\n"+
-		"- **IPC 地址**: `%s` (%s / connect)\n"+
+		"- **IPC 地址**: `%s` (unix / connect)\n"+
 		"- **超时时间**: %d 秒\n"+
 		"- **待审批请求数**: %d%s",
-		statusText, cfg.GroupID, cfg.SocketPath, cfg.Network,
+		statusText, cfg.GroupID, cfg.SocketPath,
 		cfg.TimeoutSeconds, pendingCount, pendingInfo.String())
 
 	return ctx.Markdown(text).Send()

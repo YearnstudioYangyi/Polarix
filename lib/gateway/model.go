@@ -18,10 +18,14 @@ type HelloData struct {
 
 // IdentifyData 表示 OpCode 2 Identify 鉴权消息体
 type IdentifyData struct {
-	Token      string            `json:"token"`
-	Intents    int               `json:"intents"`
-	Shard      [2]int            `json:"shard"`
-	Properties map[string]string `json:"properties,omitempty"`
+	Token      string   `json:"token"`
+	Intents    int      `json:"intents"`
+	Shard      []uint32 `json:"shard,omitempty"`
+	Properties struct {
+		OS      string `json:"$os,omitempty"`
+		Browser string `json:"$browser,omitempty"`
+		Device  string `json:"$device,omitempty"`
+	} `json:"properties,omitempty"`
 }
 
 // ResumeData 表示 OpCode 6 Resume 恢复连接消息体

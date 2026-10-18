@@ -73,8 +73,8 @@ func TestClientIdentifyAndHeartbeat(t *testing.T) {
 		if identify.Intents != 100663296 {
 			t.Errorf("intents = %d, want 100663296", identify.Intents)
 		}
-		if identify.Shard != [2]int{0, 1} {
-			t.Errorf("shard = %v, want [0, 1]", identify.Shard)
+		if len(identify.Shard) != 2 || identify.Shard[0] != 0 || identify.Shard[1] != 1 {
+			t.Errorf("shard = %v, want [0 1]", identify.Shard)
 		}
 		identifyReceived.Store(true)
 
@@ -363,5 +363,48 @@ func TestClientDispatchEventUpdatesSequence(t *testing.T) {
 
 	if seq := atomic.LoadInt64(&client.latestSeq); seq != 99 {
 		t.Errorf("latestSeq = %d, want 99", seq)
+	}
+}
+
+func TestResolveGatewayURL(t *testing.T) {
+	tests := []struct {
+		name       string
+		rawGateway string
+		proxyAPI   string
+		want       string
+	}{
+		{
+			name:       "empty proxyAPI",
+			rawGateway: "wss://api.sgroup.qq.com/websocket",
+			proxyAPI:   "",
+			want:       "wss://api.sgroup.qq.com/websocket",
+		},
+		{
+			name:       "official qq.com proxyAPI",
+			rawGateway: "wss://api.sgroup.qq.com/websocket",
+			proxyAPI:   "https://api.bot.qq.com",
+			want:       "wss://api.sgroup.qq.com/websocket",
+		},
+		{
+			name:       "http custom reverse proxy",
+			rawGateway: "wss://api.sgroup.qq.com/websocket",
+			proxyAPI:   "http://server.yearnstudio.cn:43567",
+			want:       "ws://server.yearnstudio.cn:43567/websocket",
+		},
+		{
+			name:       "https custom reverse proxy",
+			rawGateway: "wss://api.sgroup.qq.com/websocket",
+			proxyAPI:   "https://proxy.example.com:8443",
+			want:       "wss://proxy.example.com:8443/websocket",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := resolveGatewayURL(tt.rawGateway, tt.proxyAPI)
+			if got != tt.want {
+				t.Errorf("resolveGatewayURL() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }
